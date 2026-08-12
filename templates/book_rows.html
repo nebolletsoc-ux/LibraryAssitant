@@ -1,0 +1,26 @@
+{% for book in books %}
+<div class="book">
+    <h2>{{ book.title }}</h2>
+    <p>{{ book.author }}</p>
+    <p>ISBN: {{ book.isbn or "unknown" }}</p>
+
+    {% if book.availability %}
+        <strong>Available through:</strong>
+        <ul>
+        {% for item in book.availability %}
+            <li>
+                <span class="tag">{{ item.service }}</span>
+                <span class="tag">{{ item.library|capitalize }}</span>
+                <span class="tag">Format: {{ item.format }}</span>
+                <br>
+                {{ item.status }}
+                <br>
+                <a href="{{ item.url }}" target="_blank" rel="noopener">Open {{ item.service }}</a>
+            </li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>No Libby or Hoopla results found for this book in the current search.</p>
+    {% endif %}
+</div>
+{% endfor %}

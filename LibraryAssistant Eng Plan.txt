@@ -1,0 +1,311 @@
+
+
+## Project: Library Assistant – AI Agent Task List
+
+**Goal:** Build a web app that imports StoryGraph/Goodreads “Want to Read” lists and shows which books are available on Libby/Hoopla at Oakland and Berkeley Public Libraries.
+
+Use this as a prompt for an AI agent: “Implement the following tasks in order. For each task, create/modify code, tests, and docs as needed. Keep changes small and reviewable. If anything is unclear, ask before implementing.”
+
+***
+
+## Phase 0 – Setup & scaffolding
+
+### 0.1 Create project skeleton
+- Create a new web app with:
+  - Frontend: React (Vite or Next.js) + TypeScript.
+  - Backend: Python (FastAPI) or Node (Express/Nest) + TypeScript.
+- Set up basic folder structure: `frontend/`, `backend/`, `docs/`.
+- Add basic README with:
+  - Project description.
+  - How to run locally (frontend, backend).
+  - Tech stack overview.
+
+**Acceptance:**
+- `npm run dev` (or equivalent) starts frontend.
+- Backend runs locally and responds to a health endpoint (`/health`).
+
+### 0.2 Basic frontend routing
+- Create routes/pages:
+  - `/` – Home / Input screen.
+  - `/results` – Results screen (placeholder).
+- Add a simple navbar with “Library Assistant” title and links to Home and Results.
+
+**Acceptance:**
+- Navigating between Home and Results works.
+- Pages render with basic headings.
+
+### 0.3 Basic backend API
+- Implement:
+  - `GET /health` → `{ "status": "ok" }`.
+  - `POST /api/scan` stub that returns a fixed mock response.
+- Add CORS so frontend can call backend.
+
+**Acceptance:**
+- Frontend can call `POST /api/scan` and display mock response on Results page.
+
+***
+
+## Phase 1 – Core MVP: import, check, show
+
+### 1.1 CSV upload & parsing (frontend + backend)
+
+#### 1.1.1 Frontend: CSV upload UI
+- On `/`:
+  - Add file input: “Upload CSV (StoryGraph / Goodreads)”.
+  - Add “Check my list” button.
+- On file selection:
+  - Show selected file name.
+  - Disable “Check my list” until a file is selected.
+
+**Acceptance:**
+- User can select a CSV file.
+- “Check my list” is enabled only after selection.
+
+#### 1.1.2 Backend: CSV parser
+- Create `POST /api/parse-csv` endpoint.
+- Accept CSV file, parse into list of books:
+  - Fields: `title`, `author`, `isbn` (optional), `source` (`storygraph` or `goodreads` if inferable).
+- Return JSON: `[{ title, author, isbn?, source? }]`.
+- Handle basic errors (bad file, empty).
+
+**Acceptance:**
+- Uploading a valid CSV returns a list of books.
+- Invalid CSV returns a clear error message.
+
+#### 1.1.3 Frontend: integrate parse
+- On “Check my list”:
+  - Upload CSV to `/api/parse-csv`.
+  - Show parsed books count in UI (e.g., “Parsed 150 books”).
+  - Store parsed list in frontend state.
+
+**Acceptance:**
+- After upload, UI shows “Parsed N books”.
+
+### 1.2 Availability check stub
+
+#### 1.2.1 Backend: scan endpoint with mock data
+- Implement `POST /api/scan`:
+  - Input: list of books + selected libraries (default: Oakland, Berkeley).
+  - Output: list of results with fields:
+    - `title`, `author`, `isbn?`, `availability` (`available`, `unavailable`, `waitlist`, `not_found`),
+    - `format` (`ebook`, `audiobook`, `unknown`),
+    - `library` (`OAK`, `BERK`),
+    - `platform` (`libby`, `hoopla`, `unknown`).
+- For now, generate deterministic mock results (e.g., every 4th book is available).
+
+**Acceptance:**
+- Calling `/api/scan` with a list returns a result per book with the above fields.
+
+#### 1.2.2 Frontend: call scan & show results
+- On `/results`:
+  - Call `/api/scan` with parsed books.
+  - Show a simple table with:
+    - Title, Author, Availability, Format, Library, Platform.
+- Add a “Back to upload” link to `/`.
+
+**Acceptance:**
+- Results page shows a table with mock availability data.
+
+### 1.3 Status bar & progress
+
+#### 1.3.1 Backend: streaming or chunked status
+- Add optional `GET /api/scan/:id/status` or similar:
+  - Return status object:
+    - `phase` (`parsing`, `checking`, `done`, `error`),
+    - `current_book_title`,
+    - `processed_count`,
+    - `total_count`,
+    - `counts`: `{ matched, available, unavailable, not_found, errors }`.
+- For MVP, you can simulate progress over time.
+
+**Acceptance:**
+- Frontend can poll status and see progress updates.
+
+#### 1.3.2 Frontend: informative status bar
+- While scan is running:
+  - Show progress bar.
+  - Show text like:
+    - “Checking: {current_book_title}”
+    - “Scanned 120 of 350 books”
+  - Show counts: Matched, Available, Unavailable, Not found, Errors.
+
+**Acceptance:**
+- User sees live progress and counts during scan.
+
+### 1.4 Sorting
+
+#### 1.4.1 Backend: sort support (optional)
+- Allow `sort` query param on `/api/scan` or in response handling:
+  - Options: `available_first`, `latest_added`, `earliest_added`, `author_asc`, `author_desc`, `title_asc`, `title_desc`.
+- For MVP, you can sort in frontend only.
+
+**Acceptance:**
+- Results can be sorted by these criteria.
+
+#### 1.4.2 Frontend: sort dropdown
+- On `/results`:
+  - Add dropdown: “Sort by: Available first”.
+  - Options:
+    - Available first
+    - Latest Added
+    - Earliest Added
+    - Author A–Z
+    - Author Z–A
+    - Title A–Z
+    - Title Z–A
+- Apply sorting to displayed results.
+
+**Acceptance:**
+- Changing sort order re-renders table accordingly.
+
+***
+
+## Phase 2 – Usability & customization
+
+### 2.1 Library selection
+
+#### 2.1.1 Backend: library config
+- Maintain a list of supported libraries:
+  - `{ id, name, libby_enabled, hoopla_enabled }`.
+- Default: Oakland, Berkeley.
+- Accept `library_ids` in `/api/scan` request.
+
+**Acceptance:**
+- Scan respects selected libraries.
+
+#### 2.1.2 Frontend: library selector
+- On `/`:
+  - Add checkboxes or multi-select: “Libraries”.
+  - Options: Oakland Public Library, Berkeley Public Library.
+  - Persist selection in `localStorage`.
+
+**Acceptance:**
+- User can choose libraries; selection persists across reloads.
+
+### 2.2 Concise listing & row expansion
+
+#### 2.2.1 Compact table
+- Update results table:
+  - One line per book.
+  - Remove ISBN from default view.
+  - Use color chips for availability.
+
+**Acceptance:**
+- Table is compact and readable without excessive scrolling.
+
+#### 2.2.2 Expandable row details
+- On row click or “+” icon:
+  - Show additional info:
+    - Synopsis (placeholder text for now).
+    - ISBN.
+    - Links: “View on StoryGraph”, “View on Goodreads”, “Borrow on Libby/Hoopla” (placeholder URLs).
+- Ensure only one row is expanded at a time (or allow multiple, but keep it simple).
+
+**Acceptance:**
+- Clicking a row shows/hides details.
+
+### 2.3 Filtering & search
+
+#### 2.3.1 Filters
+- On `/results`:
+  - Add filter controls:
+    - Checkbox: “Available only”.
+    - Checkboxes: Libraries (OAK, BERK).
+    - Checkboxes: Formats (eBook, Audiobook).
+- Apply filters to displayed results.
+
+**Acceptance:**
+- Filters correctly limit visible rows.
+
+#### 2.3.2 Text search
+- Add text input: “Search title or author”.
+- Filter results by substring match on title/author.
+
+**Acceptance:**
+- Typing filters results in real time.
+
+### 2.4 Basic history (optional but recommended)
+
+#### 2.4.1 Backend: store last scan
+- For each session (or user token if you add auth later):
+  - Store last scan results and timestamp.
+- Add `GET /api/last-scan` to retrieve last scan.
+
+**Acceptance:**
+- Can retrieve last scan data.
+
+#### 2.4.2 Frontend: show last scan summary
+- On `/`:
+  - If last scan exists, show:
+    - “Last scan: 2 hours ago – 42 available, 210 unavailable”.
+  - Button: “View last results”.
+
+**Acceptance:**
+- User sees last scan summary and can view previous results.
+
+***
+
+## Phase 3 – Notifications & polish
+
+### 3.1 Weekly availability email (stub)
+
+#### 3.1.1 Backend: email job stub
+- Add a simple endpoint `POST /api/subscribe-weekly`:
+  - Input: email, library_ids.
+  - For now, just store in DB and return success.
+- Add a cron job or script that logs “Would send weekly email to X” (no real email yet).
+
+**Acceptance:**
+- User can “subscribe” and backend stores email.
+
+#### 3.1.2 Frontend: weekly email setup
+- On `/results` or a new `/notifications` page:
+  - Add form: email input + “Subscribe to weekly summary”.
+  - Show success message on subscribe.
+
+**Acceptance:**
+- User can enter email and see confirmation.
+
+### 3.2 Availability alerts (stub)
+
+#### 3.2.1 Backend: alert subscription
+- Add `POST /api/subscribe-alerts`:
+  - Input: email, list of book ids or titles.
+  - Store subscription.
+- Add a stub that logs “Would send alert for book X”.
+
+**Acceptance:**
+- Subscriptions can be stored.
+
+#### 3.2.2 Frontend: alert opt-in
+- Add toggle: “Email me when a book becomes available”.
+- Collect email if not already provided.
+
+**Acceptance:**
+- User can opt in and see confirmation.
+
+### 3.3 UX polish
+
+- Add consistent design system:
+  - Fonts, colors, spacing.
+  - Clear primary/secondary buttons.
+- Improve empty states:
+  - No results yet → helpful copy + CTA.
+  - No matches → suggest changing filters.
+- Improve error states:
+  - Clear messages + “Retry” button.
+
+**Acceptance:**
+- App looks cohesive and professional; empty/error states are clear.
+
+***
+
+## Phase 4 – Advanced / optional
+
+- Integrate real Libby/Hoopla data sources (APIs, scraping, or library APIs).
+- Improve book matching logic (fuzzy matching, ISBN priority).
+- Add real StoryGraph/Goodreads integration if APIs/exports allow.
+- Add user accounts, saved lists, and preferences.
+- Add tags, custom lists, “hide already read” logic.
+- Mobile-first refinements, PWA support.
+

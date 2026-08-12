@@ -1,0 +1,569 @@
+<!doctype html>
+<html>
+<head>
+    <title>Library Assistant</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            max-width: 1100px;
+        }
+
+        .status {
+            margin: 15px 0 10px;
+            padding: 10px 12px;
+            background: #f7f7f7;
+            border-left: 4px solid #4a90e2;
+            border-radius: 4px;
+        }
+
+        .progress {
+            width: 100%;
+            background: #eee;
+            border-radius: 999px;
+            overflow: hidden;
+            height: 8px;
+            margin-top: 8px;
+        }
+
+        .progress > div {
+            height: 100%;
+            width: 0%;
+            background: #4a90e2;
+            transition: width 0.2s ease;
+        }
+
+        #progress-text {
+            margin: 6px 0 14px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .summary {
+            margin: 12px 0 16px;
+            font-weight: bold;
+        }
+
+        .book {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 7px 4px;
+            border-bottom: 1px solid #ddd;
+            line-height: 1.35;
+        }
+
+        .indicator {
+            width: 12px;
+            flex: 0 0 12px;
+            font-size: 16px;
+            line-height: 20px;
+        }
+
+        .indicator.available {
+            color: #168329;
+        }
+
+        .indicator.waitlist {
+            color: #d08a00;
+        }
+
+        .indicator.none {
+            color: #999;
+        }
+
+        .book-main {
+            flex: 1;
+        }
+
+        .book-title {
+            font-weight: bold;
+        }
+
+        .author {
+            color: #555;
+        }
+
+        .results {
+            margin-top: 2px;
+            font-size: 14px;
+        }
+
+        .result {
+            display: inline-block;
+            margin-right: 12px;
+            margin-top: 2px;
+        }
+
+        .available {
+            color: #168329;
+        }
+
+        .waitlist {
+            color: #b36b00;
+        }
+
+        .no-match {
+            color: #777;
+        }
+
+        a {
+            color: #06c;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        button {
+            margin-left: 8px;
+        }
+    </style>
+</head>
+
+<body>
+
+<h1>Library Assistant</h1>
+
+<p>
+    This page shows your StoryGraph or Goodreads
+    “want to read” books and highlights Libby or Hoopla
+    matches at Oakland and Berkeley libraries.
+</p>
+
+<form id="upload-form">
+
+    <label for="books_file">
+        Import a CSV export:
+    </label>
+
+    <input
+        type="file"
+        id="books_file"
+        name="books_file"
+        accept=".csv,text/csv"
+        required
+    >
+
+    <button type="submit">
+        Analyze books
+    </button>
+
+</form>
+
+<div id="status" class="status">
+    <strong>Status:</strong>
+    Select your CSV file and click Analyze books.
+</div>
+
+<div class="progress">
+    <div id="progress-bar"></div>
+</div>
+
+<p id="progress-text"></p>
+
+<div id="summary" class="summary"></div>
+
+<div id="books-container"></div>
+
+
+<script>
+
+let jobId = null;
+let statusTimer = null;
+
+
+document
+    .getElementById("upload-form")
+    .addEventListener("submit", async function(event) {
+
+        event.preventDefault();
+
+        const fileInput =
+            document.getElementById("books_file");
+
+        const file = fileInput.files[0];
+
+        if (!file) {
+            return;
+        }
+
+        document.getElementById("status").innerHTML =
+            "<strong>Status:</strong> Uploading CSV…";
+
+        document.getElementById("summary").innerHTML = "";
+
+        document.getElementById("books-container").innerHTML = "";
+
+        document.getElementById("progress-bar").style.width = "0%";
+
+        document.getElementById("progress-text").textContent = "";
+
+        const formData = new FormData();
+
+        formData.append("books_file", file);
+
+        try {
+
+            const response = await fetch("/", {
+                method: "POST",
+                body: formData
+            });
+
+            if (!response.ok) {
+                throw new Error(
+                    "Upload failed: " + response.status
+                );
+            }
+
+            const data = await response.json();
+
+            if (!data.job_id) {
+                throw new Error(
+                    "Server did not return a job ID."
+                );
+            }
+
+            jobId = data.job_id;
+
+            document.getElementById("status").innerHTML =
+                "<strong>Status:</strong> Analysis started. " +
+                data.total +
+                " books queued.";
+
+            startPolling();
+
+        } catch (error) {
+
+            document.getElementById("status").innerHTML =
+                "<strong>Status:</strong> Upload failed: " +
+                escapeHtml(error.message);
+        }
+    });
+
+
+function startPolling() {
+
+    if (statusTimer) {
+        clearInterval(statusTimer);
+    }
+
+    pollStatus();
+
+    statusTimer = setInterval(
+        pollStatus,
+        500
+    );
+}
+
+
+async function pollStatus() {
+
+    if (!jobId) {
+        return;
+    }
+
+    try {
+
+        const response = await fetch(
+            "/status?job_id=" +
+            encodeURIComponent(jobId)
+        );
+
+        if (!response.ok) {
+            throw new Error(
+                "Status request failed: " +
+                response.status
+            );
+        }
+
+        const data = await response.json();
+
+        const total = data.total;
+
+        const completed = data.completed;
+
+        const percent = total
+            ? Math.round(completed / total * 100)
+            : 0;
+
+        document.getElementById(
+            "progress-bar"
+        ).style.width = percent + "%";
+
+        document.getElementById(
+            "progress-text"
+        ).textContent =
+            completed +
+            " of " +
+            total +
+            " books analyzed";
+
+        if (data.finished) {
+
+            clearInterval(statusTimer);
+
+            document.getElementById(
+                "status"
+            ).innerHTML =
+                "<strong>Status:</strong> Analysis complete.";
+
+        } else {
+
+            document.getElementById(
+                "status"
+            ).innerHTML =
+                "<strong>Status:</strong> Analyzing books…";
+        }
+
+        renderBooks(data.books);
+
+    } catch (error) {
+
+        console.error(
+            "Status error:",
+            error
+        );
+    }
+}
+
+
+function renderBooks(books) {
+
+    const container =
+        document.getElementById(
+            "books-container"
+        );
+
+    const summary =
+        document.getElementById(
+            "summary"
+        );
+
+    container.innerHTML = "";
+
+    let availableBooks = 0;
+    let waitlistBooks = 0;
+    let noMatchBooks = 0;
+
+    books.forEach(function(book) {
+
+        const results =
+            book.oakland || [];
+
+        const availableResults =
+            results.filter(
+                result => result.available
+            );
+
+        const waitlistResults =
+            results.filter(
+                result =>
+                    !result.available &&
+                    result.wait
+            );
+
+        if (availableResults.length > 0) {
+            availableBooks++;
+        }
+
+        if (waitlistResults.length > 0) {
+            waitlistBooks++;
+        }
+
+        if (
+            availableResults.length === 0 &&
+            waitlistResults.length === 0
+        ) {
+            noMatchBooks++;
+        }
+
+
+        const div =
+            document.createElement("div");
+
+        div.className = "book";
+
+
+        let indicatorClass = "none";
+        let indicator = "○";
+
+        if (availableResults.length > 0) {
+
+            indicatorClass = "available";
+            indicator = "●";
+
+        } else if (waitlistResults.length > 0) {
+
+            indicatorClass = "waitlist";
+            indicator = "●";
+        }
+
+
+        let html =
+            '<div class="indicator ' +
+            indicatorClass +
+            '">' +
+            indicator +
+            "</div>";
+
+
+        html += '<div class="book-main">';
+
+        html +=
+            '<span class="book-title">' +
+            escapeHtml(book.title) +
+            "</span>";
+
+        if (book.author) {
+
+            html +=
+                ' <span class="author">— ' +
+                escapeHtml(book.author) +
+                "</span>";
+        }
+
+
+        html += '<div class="results">';
+
+
+        if (results.length === 0) {
+
+            html +=
+                '<span class="no-match">' +
+                "No current match" +
+                "</span>";
+
+        } else {
+
+            results.forEach(function(result) {
+
+                const provider =
+                    result.provider || "";
+
+                const format =
+                    result.format || "";
+
+                const label =
+                    provider +
+                    (format ? " " + format : "");
+
+                let statusText = "";
+
+                let statusClass = "";
+
+
+                if (result.available) {
+
+                    statusText = "Available";
+                    statusClass = "available";
+
+                } else if (result.wait) {
+
+                    statusText =
+                        result.wait === "Waitlist"
+                            ? "Waitlist"
+                            : result.wait;
+
+                    statusClass = "waitlist";
+
+                } else {
+
+                    statusText =
+                        "Not currently available";
+
+                    statusClass = "waitlist";
+                }
+
+
+                let resultHtml = "";
+
+                if (result.url) {
+
+                    resultHtml =
+                        '<span class="result">' +
+                        '<a href="' +
+                        escapeHtml(result.url) +
+                        '" target="_blank" rel="noopener">' +
+                        "<strong>" +
+                        escapeHtml(label) +
+                        "</strong>" +
+                        "</a>" +
+                        " · " +
+                        '<span class="' +
+                        statusClass +
+                        '">' +
+                        escapeHtml(statusText) +
+                        "</span>" +
+                        "</span>";
+
+                } else {
+
+                    resultHtml =
+                        '<span class="result">' +
+                        "<strong>" +
+                        escapeHtml(label) +
+                        "</strong>" +
+                        " · " +
+                        '<span class="' +
+                        statusClass +
+                        '">' +
+                        escapeHtml(statusText) +
+                        "</span>" +
+                        "</span>";
+                }
+
+
+                html += resultHtml;
+            });
+        }
+
+
+        html += "</div>";
+
+        html += "</div>";
+
+        div.innerHTML = html;
+
+        container.appendChild(div);
+    });
+
+
+    const analyzed =
+        books.length;
+
+    summary.textContent =
+        analyzed +
+        " analyzed • " +
+        availableBooks +
+        " with availability • " +
+        waitlistBooks +
+        " with waitlists • " +
+        noMatchBooks +
+        " with no current match";
+}
+
+
+function escapeHtml(value) {
+
+    if (
+        value === null ||
+        value === undefined
+    ) {
+        return "";
+    }
+
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+</script>
+
+</body>
+</html>
