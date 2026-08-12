@@ -1,0 +1,87 @@
+<div class="book">
+
+    <div class="book-info">
+
+        <span class="book-title">
+            {{ book.title }}
+        </span>
+
+        {% if book.author %}
+            <span class="book-author">
+                — {{ book.author }}
+            </span>
+        {% endif %}
+
+    </div>
+
+    <div class="book-status">
+
+        {% if book.state == "checking" %}
+
+            <span class="checking">
+                <span class="status-dot dot-checking"></span>
+                {{ book.message }}
+            </span>
+
+        {% elif book.state == "error" %}
+
+            <span class="error">
+                <span class="status-dot dot-error"></span>
+                Error
+            </span>
+
+        {% elif book.oakland %}
+
+            {% set available = book.oakland | selectattr("available") | list %}
+
+            {% if available %}
+
+                <span class="available">
+                    <span class="status-dot dot-available"></span>
+
+                    {% for result in available %}
+
+                        {{ result.provider }}
+
+                        {% if result.format %}
+                            {{ result.format }}
+                        {% endif %}
+
+                        {% if result.url %}
+                            <a
+                                class="library-link"
+                                href="{{ result.url }}"
+                                target="_blank"
+                                rel="noopener"
+                            >View</a>
+                        {% endif %}
+
+                        {% if not loop.last %}
+                            ,
+                        {% endif %}
+
+                    {% endfor %}
+
+                </span>
+
+            {% else %}
+
+                <span class="unavailable">
+                    <span class="status-dot dot-unavailable"></span>
+                    No current match
+                </span>
+
+            {% endif %}
+
+        {% else %}
+
+            <span class="unavailable">
+                <span class="status-dot dot-unavailable"></span>
+                No current match
+            </span>
+
+        {% endif %}
+
+    </div>
+
+</div>
