@@ -415,6 +415,12 @@ document
 
 // Filter button event listeners
 function setupFilterListeners() {
+    // Only set up once
+    if (document.body.dataset.filtersSetup === 'true') {
+        return;
+    }
+    document.body.dataset.filtersSetup = 'true';
+
     // Format filters
     document.querySelectorAll('[data-format]').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -559,32 +565,38 @@ function renderBooks(books, isFiltering) {
     // Apply filters
     let filteredBooks = allBooks.filter(function(book) {
         
-        // Format filter
-        if (currentFilters.format !== "all") {
-            const results = book.oakland || [];
-            const hasFormat = results.some(function(r) {
-                const fmt = (r.format || "").toLowerCase();
-                if (currentFilters.format === "audiobook") {
-                    return fmt.includes("audio");
-                } else if (currentFilters.format === "ebook") {
-                    return fmt.includes("ebook") || fmt.includes("book");
-                }
-                return true;
-            });
-            if (!hasFormat) return false;
-        }
-
-        // Availability filter
-        if (currentFilters.availability !== "all") {
-            const results = book.oakland || [];
-            const available = results.filter(r => r.available).length > 0;
-            const waitlist = results.filter(r => !r.available && r.wait).length > 0;
+        const results = book.oakland || [];
+        
+        // Check if book has results matching BOTH format AND availability filters
+        let hasMatch = results.some(function(r) {
+            const fmt = (r.format || "").toLowerCase();
             
-            if (currentFilters.availability === "available" && !available) return false;
-            if (currentFilters.availability === "waitlist" && !waitlist) return false;
-        }
-
-        return true;
+            // Check format filter
+            let formatMatches = true;
+            if (currentFilters.format !== "all") {
+                if (currentFilters.format === "audiobook") {
+                    formatMatches = fmt.includes("audio");
+                } else if (currentFilters.format === "ebook") {
+                    formatMatches = fmt.includes("ebook") || fmt.includes("book");
+                }
+            }
+            
+            if (!formatMatches) return false;
+            
+            // Check availability filter
+            let availabilityMatches = true;
+            if (currentFilters.availability !== "all") {
+                if (currentFilters.availability === "available") {
+                    availabilityMatches = r.available === true;
+                } else if (currentFilters.availability === "waitlist") {
+                    availabilityMatches = r.available === false && r.wait;
+                }
+            }
+            
+            return availabilityMatches;
+        });
+        
+        return hasMatch;
     });
 
     // Sort
