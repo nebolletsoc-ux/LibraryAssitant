@@ -190,29 +190,77 @@
             font-size: 12px;
         }
 
+        .filter-controls {
+            margin: 12px 0;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 4px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .filter-group label {
+            font-weight: 500;
+            font-size: 13px;
+            color: #333;
+            margin: 0;
+        }
+
+        .filter-buttons {
+            display: flex;
+            gap: 4px;
+        }
+
+        .filter-btn {
+            padding: 4px 10px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 3px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .filter-btn:hover {
+            background: #e8e8e8;
+        }
+
+        .filter-btn.active {
+            background: #0366d6;
+            color: white;
+            border-color: #0366d6;
+        }
+
+        .sort-select {
+            padding: 4px 8px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-size: 12px;
+            background: white;
+            cursor: pointer;
+        }
+
         @media (max-width: 480px) {
-            body {
-                padding: 8px;
-            }
-
-            h1 {
-                font-size: 20px;
-            }
-
-            .book {
+            .filter-controls {
+                flex-direction: column;
+                align-items: flex-start;
                 gap: 8px;
-                padding: 6px 8px;
             }
 
-            .indicator {
-                width: 24px;
-                height: 24px;
-                font-size: 20px;
+            .filter-group {
+                width: 100%;
             }
 
-            .status-text {
-                min-width: 60px;
-                font-size: 11px;
+            .sort-select {
+                width: 100%;
             }
         }
     </style>
@@ -255,6 +303,34 @@
 
 <p id="progress-text"></p>
 
+<div id="filter-controls" class="filter-controls" style="display: none;">
+    <div class="filter-group">
+        <label>Format:</label>
+        <div class="filter-buttons">
+            <button class="filter-btn active" data-format="all">All</button>
+            <button class="filter-btn" data-format="audiobook">🎧 Audiobook</button>
+            <button class="filter-btn" data-format="ebook">📖 eBook</button>
+        </div>
+    </div>
+
+    <div class="filter-group">
+        <label>Availability:</label>
+        <div class="filter-buttons">
+            <button class="filter-btn active" data-availability="all">All</button>
+            <button class="filter-btn" data-availability="available">✓ Available</button>
+            <button class="filter-btn" data-availability="waitlist">⧖ Waitlist</button>
+        </div>
+    </div>
+
+    <div class="filter-group">
+        <label>Sort:</label>
+        <select id="sort-select" class="sort-select">
+            <option value="availability">By Availability</option>
+            <option value="title">By Title (A-Z)</option>
+        </select>
+    </div>
+</div>
+
 <div id="summary" class="summary"></div>
 
 <div id="books-container"></div>
@@ -264,6 +340,12 @@
 
 let jobId = null;
 let statusTimer = null;
+let allBooks = [];  // Store all books for filtering
+let currentFilters = {
+    format: "all",
+    availability: "all",
+    sort: "availability"
+};
 
 
 // Auto-submit when file is selected
@@ -329,6 +411,41 @@ document
                 escapeHtml(error.message);
         }
     });
+
+
+// Filter button event listeners
+function setupFilterListeners() {
+    // Format filters
+    document.querySelectorAll('[data-format]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('[data-format]').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            currentFilters.format = this.dataset.format;
+            rerenderBooks();
+        });
+    });
+
+    // Availability filters
+    document.querySelectorAll('[data-availability]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('[data-availability]').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            currentFilters.availability = this.dataset.availability;
+            rerenderBooks();
+        });
+    });
+
+    // Sort selector
+    document.getElementById('sort-select').addEventListener('change', function() {
+        currentFilters.sort = this.value;
+        rerenderBooks();
+    });
+}
+
+
+function rerenderBooks() {
+    renderBooks(allBooks, true);
+}
 
 
 function startPolling() {
@@ -415,9 +532,7 @@ async function pollStatus() {
         );
     }
 }
-
-
-function renderBooks(books) {
+function renderBooks(books, isFiltering) {
 
     const container =
         document.getElementById(
@@ -429,6 +544,64 @@ function renderBooks(books) {
             "summary"
         );
 
+    const filterControls = 
+        document.getElementById(
+            "filter-controls"
+        );
+
+    // Store books if not filtering (initial render)
+    if (!isFiltering) {
+        allBooks = books;
+        filterControls.style.display = "flex";
+        setupFilterListeners();
+    }
+
+    // Apply filters
+    let filteredBooks = allBooks.filter(function(book) {
+        
+        // Format filter
+        if (currentFilters.format !== "all") {
+            const results = book.oakland || [];
+            const hasFormat = results.some(function(r) {
+                const fmt = (r.format || "").toLowerCase();
+                if (currentFilters.format === "audiobook") {
+                    return fmt.includes("audio");
+                } else if (currentFilters.format === "ebook") {
+                    return fmt.includes("ebook") || fmt.includes("book");
+                }
+                return true;
+            });
+            if (!hasFormat) return false;
+        }
+
+        // Availability filter
+        if (currentFilters.availability !== "all") {
+            const results = book.oakland || [];
+            const available = results.filter(r => r.available).length > 0;
+            const waitlist = results.filter(r => !r.available && r.wait).length > 0;
+            
+            if (currentFilters.availability === "available" && !available) return false;
+            if (currentFilters.availability === "waitlist" && !waitlist) return false;
+        }
+
+        return true;
+    });
+
+    // Sort
+    if (currentFilters.sort === "title") {
+        filteredBooks.sort(function(a, b) {
+            return (a.title || "").localeCompare(b.title || "");
+        });
+    } else if (currentFilters.sort === "availability") {
+        filteredBooks.sort(function(a, b) {
+            const aResults = a.oakland || [];
+            const bResults = b.oakland || [];
+            const aAvailable = aResults.filter(r => r.available).length > 0 ? 0 : 1;
+            const bAvailable = bResults.filter(r => r.available).length > 0 ? 0 : 1;
+            return aAvailable - bAvailable;
+        });
+    }
+
     container.innerHTML = "";
 
     let availableBooks = 0;
@@ -436,7 +609,7 @@ function renderBooks(books) {
     let noMatchBooks = 0;
     let errorBooks = 0;
 
-    books.forEach(function(book) {
+    filteredBooks.forEach(function(book) {
 
         const results = book.oakland || [];
         const state = book.state || "unknown";
@@ -622,7 +795,7 @@ function renderBooks(books) {
 
     // Update summary
     const total = availableBooks + waitlistBooks + noMatchBooks + errorBooks;
-    let summaryText = total + " analyzed";
+    let summaryText = total + " shown";
 
     if (availableBooks > 0) {
         summaryText += " • " + availableBooks + " available";
