@@ -4,144 +4,216 @@
     <title>Library Assistant</title>
 
     <style>
+        * {
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: Arial, sans-serif;
-            margin: 40px;
-            max-width: 1100px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+            margin: 0;
+            padding: 12px;
+            max-width: 800px;
+            background: #fafafa;
+        }
+
+        h1 {
+            margin: 0 0 8px 0;
+            font-size: 24px;
+        }
+
+        p {
+            margin: 0 0 12px 0;
+            color: #555;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        form {
+            margin: 12px 0 16px 0;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        label {
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        input[type="file"] {
+            font-size: 14px;
+            flex: 1;
+            min-width: 180px;
         }
 
         .status {
-            margin: 15px 0 10px;
-            padding: 10px 12px;
-            background: #f7f7f7;
-            border-left: 4px solid #4a90e2;
+            margin: 12px 0;
+            padding: 8px 12px;
+            background: #f0f4f8;
+            border-left: 4px solid #0366d6;
             border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .status strong {
+            display: block;
+            margin-bottom: 2px;
         }
 
         .progress {
             width: 100%;
-            background: #eee;
-            border-radius: 999px;
+            height: 6px;
+            background: #e5e5e5;
+            border-radius: 3px;
             overflow: hidden;
-            height: 8px;
-            margin-top: 8px;
+            margin: 8px 0;
         }
 
         .progress > div {
             height: 100%;
-            width: 0%;
-            background: #4a90e2;
+            background: #28a745;
             transition: width 0.2s ease;
         }
 
         #progress-text {
-            margin: 6px 0 14px;
+            margin: 4px 0;
             color: #666;
-            font-size: 14px;
+            font-size: 12px;
         }
 
         .summary {
-            margin: 12px 0 20px;
-            font-weight: bold;
+            margin: 8px 0 12px 0;
+            font-size: 13px;
+            color: #555;
+            font-weight: 500;
         }
 
         .book {
-            display: flex;
-            align-items: flex-start;
+            display: grid;
+            grid-template-columns: 28px 1fr;
             gap: 10px;
-            padding: 10px 4px 12px;
-            border-bottom: 1px solid #ddd;
-        }
-
-        .indicator {
-            width: 12px;
-            flex: 0 0 12px;
-            font-size: 16px;
-            line-height: 20px;
-        }
-
-        .indicator.available {
-            color: #168329;
-        }
-
-        .indicator.waitlist {
-            color: #c27b00;
-        }
-
-        .indicator.none {
-            color: #999;
-        }
-
-        .book-main {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .book-title {
-            font-weight: bold;
-        }
-
-        .author {
-            color: #555;
-        }
-
-        .library-section {
-            margin-top: 6px;
-        }
-
-        .library-name {
-            font-weight: bold;
-            margin-top: 5px;
+            align-items: flex-start;
+            padding: 8px 10px;
+            border-bottom: 1px solid #e5e5e5;
+            font-size: 14px;
+            background: white;
+            border-radius: 3px;
             margin-bottom: 2px;
         }
 
-        .provider-section {
-            margin-left: 12px;
-            margin-bottom: 3px;
+        .indicator {
+            font-size: 24px;
+            line-height: 1;
+            text-align: center;
+            flex-shrink: 0;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
         }
 
-        .provider-name {
-            color: #555;
-            font-size: 13px;
-            margin-right: 5px;
+        .indicator.available {
+            color: white;
+            background: #28a745;
         }
 
-        .result {
-            display: inline-block;
-            margin-right: 12px;
+        .indicator.waitlist {
+            color: white;
+            background: #ff9800;
+        }
+
+        .indicator.error {
+            color: white;
+            background: #dc3545;
+        }
+
+        .indicator.checking {
+            color: white;
+            background: #6c757d;
+        }
+
+        .book-info {
+            min-width: 0;
+            flex: 1;
+        }
+
+        .book-title {
+            font-weight: 600;
+            color: #222;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: block;
+        }
+
+        .author {
+            color: #777;
+            font-size: 12px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: block;
+        }
+
+        .book-availability {
+            font-size: 11px;
+            color: #666;
             margin-top: 2px;
-            font-size: 14px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
         }
 
-        .available {
-            color: #168329;
+        .availability-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
         }
 
-        .waitlist {
-            color: #b36b00;
+        .availability-item.available {
+            color: #28a745;
+            font-weight: 500;
         }
 
-        .no-match {
-            color: #777;
+        .availability-item.waitlist {
+            color: #ff9800;
         }
 
-        .no-library-match {
-            color: #777;
-            font-size: 13px;
-            margin-left: 12px;
+        .availability-item.unavailable {
+            color: #999;
         }
 
-        a {
-            color: #06c;
-            text-decoration: none;
+        .format-icon {
+            font-size: 12px;
         }
 
-        a:hover {
-            text-decoration: underline;
-        }
+        @media (max-width: 480px) {
+            body {
+                padding: 8px;
+            }
 
-        button {
-            margin-left: 8px;
+            h1 {
+                font-size: 20px;
+            }
+
+            .book {
+                gap: 8px;
+                padding: 6px 8px;
+            }
+
+            .indicator {
+                width: 24px;
+                height: 24px;
+                font-size: 20px;
+            }
+
+            .status-text {
+                min-width: 60px;
+                font-size: 11px;
+            }
         }
     </style>
 </head>
@@ -170,15 +242,11 @@
         required
     >
 
-    <button type="submit">
-        Analyze books
-    </button>
-
 </form>
 
 <div id="status" class="status">
     <strong>Status:</strong>
-    Select your CSV file and click Analyze books.
+    Select your CSV file to begin.
 </div>
 
 <div class="progress">
@@ -198,16 +266,12 @@ let jobId = null;
 let statusTimer = null;
 
 
+// Auto-submit when file is selected
 document
-    .getElementById("upload-form")
-    .addEventListener("submit", async function(event) {
+    .getElementById("books_file")
+    .addEventListener("change", async function(event) {
 
-        event.preventDefault();
-
-        const fileInput =
-            document.getElementById("books_file");
-
-        const file = fileInput.files[0];
+        const file = this.files[0];
 
         if (!file) {
             return;
@@ -370,534 +434,213 @@ function renderBooks(books) {
     let availableBooks = 0;
     let waitlistBooks = 0;
     let noMatchBooks = 0;
-
+    let errorBooks = 0;
 
     books.forEach(function(book) {
 
-        const results =
-            book.oakland || [];
+        const results = book.oakland || [];
+        const state = book.state || "unknown";
 
-        const availableResults =
-            results.filter(
-                result => result.available
-            );
+        // Count statuses and build availability info
+        const availableResults = results.filter(r => r.available);
+        const waitlistResults = results.filter(r => !r.available && r.wait);
 
-        const waitlistResults =
-            results.filter(
-                result =>
-                    !result.available &&
-                    result.wait
-            );
-
-        if (availableResults.length > 0) {
+        if (state === "error") {
+            errorBooks++;
+        } else if (availableResults.length > 0) {
             availableBooks++;
-        }
-
-        if (waitlistResults.length > 0) {
+        } else if (waitlistResults.length > 0) {
             waitlistBooks++;
-        }
-
-        if (
-            availableResults.length === 0 &&
-            waitlistResults.length === 0
-        ) {
+        } else {
             noMatchBooks++;
         }
 
-
-        const div =
-            document.createElement("div");
-
+        // Create book row
+        const div = document.createElement("div");
         div.className = "book";
 
+        // Determine status and indicator
+        let indicatorClass = "checking";
+        let indicator = "...";
 
-        let indicatorClass = "none";
-        let indicator = "○";
-
-        if (availableResults.length > 0) {
-
-            indicatorClass = "available";
-            indicator = "●";
-
-        } else if (waitlistResults.length > 0) {
-
-            indicatorClass = "waitlist";
-            indicator = "●";
+        if (state === "error") {
+            indicatorClass = "error";
+            indicator = "!";
+        } else if (state === "complete") {
+            if (availableResults.length > 0) {
+                indicatorClass = "available";
+                indicator = "✓";
+            } else if (waitlistResults.length > 0) {
+                indicatorClass = "waitlist";
+                indicator = "⧖";
+            } else {
+                indicatorClass = "checking";
+                indicator = "○";
+            }
         }
 
+        // Indicator
+        const indicatorDiv = document.createElement("div");
+        indicatorDiv.className = "indicator " + indicatorClass;
+        indicatorDiv.textContent = indicator;
 
-        let html =
-            '<div class="indicator ' +
-            indicatorClass +
-            '">' +
-            indicator +
-            "</div>";
+        // Book info container
+        const infoDiv = document.createElement("div");
 
+        // Title and author
+        const titleDiv = document.createElement("div");
+        titleDiv.className = "book-info";
 
-        html += '<div class="book-main">';
+        const titleSpan = document.createElement("span");
+        titleSpan.className = "book-title";
+        titleSpan.textContent = book.title;
 
-        html +=
-            '<span class="book-title">' +
-            escapeHtml(book.title) +
-            "</span>";
+        const authorSpan = document.createElement("span");
+        authorSpan.className = "author";
+        authorSpan.textContent = book.author || "";
 
-        if (book.author) {
+        titleDiv.appendChild(titleSpan);
+        titleDiv.appendChild(authorSpan);
 
-            html +=
-                ' <span class="author">— ' +
-                escapeHtml(book.author) +
-                "</span>";
-        }
+        infoDiv.appendChild(titleDiv);
 
+        // Availability details
+        if (state === "complete" && results.length > 0) {
+            const availDiv = document.createElement("div");
+            availDiv.className = "book-availability";
 
-        /*
-         * Group results first by library, then provider.
-         *
-         * Current expected libraries:
-         *   Oakland
-         *   Berkeley
-         *
-         * Current expected providers:
-         *   Hoopla
-         *   Libby
-         */
-        const libraries = {};
-
-        results.forEach(function(result) {
-
-            const library =
-                normalizeLibraryName(
-                    result.library
-                );
-
-            const provider =
-                result.provider ||
-                "Other";
-
-            if (!libraries[library]) {
-                libraries[library] = {};
-            }
-
-            if (!libraries[library][provider]) {
-                libraries[library][provider] = [];
-            }
-
-            libraries[library][provider].push(
-                result
-            );
-        });
-
-
-        html += '<div class="library-section">';
-
-
-        /*
-         * Always show the two libraries so that
-         * it is immediately clear where results
-         * were and were not found.
-         */
-        const libraryOrder = [
-            "Oakland",
-            "Berkeley"
-        ];
-
-
-        let anyLibraryResult = false;
-
-
-        libraryOrder.forEach(function(libraryName) {
-
-            const providerGroups =
-                libraries[libraryName];
-
-            html +=
-                '<div class="library-name">' +
-                escapeHtml(libraryName) +
-                "</div>";
-
-
-            if (
-                !providerGroups ||
-                Object.keys(providerGroups).length === 0
-            ) {
-
-                html +=
-                    '<div class="no-library-match">' +
-                    "No current match" +
-                    "</div>";
-
-                return;
-            }
-
-
-            anyLibraryResult = true;
-
-
-            const providerOrder = [
-                "Libby",
-                "Hoopla"
-            ];
-
-
-            const providers =
-                Object.keys(providerGroups);
-
-
-            const orderedProviders =
-                providerOrder
-                    .filter(
-                        provider =>
-                            providers.includes(provider)
-                    )
-                    .concat(
-                        providers.filter(
-                            provider =>
-                                !providerOrder.includes(
-                                    provider
-                                )
-                        )
-                    );
-
-
-            orderedProviders.forEach(
-                function(provider) {
-
-                    const providerResults =
-                        providerGroups[provider];
-
-
-                    html +=
-                        '<div class="provider-section">';
-
-                    html +=
-                        '<span class="provider-name">' +
-                        escapeHtml(provider) +
-                        ":</span>";
-
-
-                    /*
-                     * Group identical format/status
-                     * results, but retain every URL.
-                     *
-                     * This produces:
-                     *
-                     * Hoopla: Audiobook ×3 · Available
-                     *
-                     * while keeping individual links
-                     * underneath.
-                     */
-                    const groups =
-                        groupResults(
-                            providerResults
-                        );
-
-
-                    groups.forEach(
-                        function(group) {
-
-                            html +=
-                                renderResultGroup(
-                                    group
-                                );
-                        }
-                    );
-
-
-                    html += "</div>";
-                }
-            );
-        });
-
-
-        /*
-         * If there were somehow a library name other
-         * than Oakland/Berkeley, don't silently lose it.
-         */
-        Object.keys(libraries)
-            .filter(
-                name =>
-                    !libraryOrder.includes(name)
-            )
-            .forEach(function(libraryName) {
-
-                const providerGroups =
-                    libraries[libraryName];
-
-                html +=
-                    '<div class="library-name">' +
-                    escapeHtml(libraryName) +
-                    "</div>";
-
-                Object.keys(providerGroups)
-                    .forEach(function(provider) {
-
-                        html +=
-                            '<div class="provider-section">' +
-                            '<span class="provider-name">' +
-                            escapeHtml(provider) +
-                            ":</span>";
-
-                        groupResults(
-                            providerGroups[provider]
-                        ).forEach(
-                            function(group) {
-                                html +=
-                                    renderResultGroup(
-                                        group
-                                    );
-                            }
-                        );
-
-                        html += "</div>";
-                    });
+            // Group by format
+            const byFormat = {};
+            results.forEach(function(result) {
+                const fmt = result.format || "Digital";
+                if (!byFormat[fmt]) byFormat[fmt] = [];
+                byFormat[fmt].push(result);
             });
 
+            // Create items for each format
+            Object.keys(byFormat).forEach(function(format) {
+                const items = byFormat[format];
+                
+                // Get unique provider-library combos
+                const combos = {};
+                items.forEach(function(result) {
+                    const lib = result.library || "Unknown";
+                    const prov = result.provider || "Unknown";
+                    const key = prov + "|" + lib;
+                    
+                    if (!combos[key]) {
+                        combos[key] = {
+                            provider: prov,
+                            library: lib,
+                            available: result.available,
+                            wait: result.wait,
+                            url: result.url
+                        };
+                    } else if (result.available && !combos[key].available) {
+                        // Prefer available over waitlist
+                        combos[key] = {
+                            provider: prov,
+                            library: lib,
+                            available: result.available,
+                            wait: result.wait,
+                            url: result.url
+                        };
+                    }
+                });
 
-        /*
-         * If there are absolutely no results,
-         * the library sections above already say
-         * "No current match."
-         */
-        html += "</div>";
+                // Create item for each combo
+                Object.keys(combos).forEach(function(key) {
+                    const combo = combos[key];
+                    
+                    const item = document.createElement("span");
+                    let itemClass = combo.available ? "available" : "waitlist";
+                    item.className = "availability-item " + itemClass;
 
-        html += "</div>";
+                    // Format icon
+                    let icon = "📚";
+                    if (format.toLowerCase().includes("audio")) {
+                        icon = "🎧";
+                    } else if (format.toLowerCase().includes("ebook") || format.toLowerCase().includes("book")) {
+                        icon = "📖";
+                    }
 
-        div.innerHTML = html;
+                    // Library short name
+                    let libShort = combo.library;
+                    if (libShort.toLowerCase() === "oakland") {
+                        libShort = "O";
+                    } else if (libShort.toLowerCase() === "berkeley") {
+                        libShort = "B";
+                    }
+
+                    // Provider
+                    let provName = combo.provider;
+                    if (provName === "Libby") {
+                        provName = "Libby";
+                    }
+
+                    // Status
+                    let statusText = combo.available ? "✓" : "⧖";
+
+                    const text = document.createTextNode(
+                        icon + " " + format + " (" + provName + "-" + libShort + ") " + statusText
+                    );
+
+                    item.appendChild(text);
+
+                    // Make clickable if URL exists
+                    if (combo.url) {
+                        const link = document.createElement("a");
+                        link.href = combo.url;
+                        link.target = "_blank";
+                        link.rel = "noopener";
+                        link.style.color = "inherit";
+                        link.style.textDecoration = "underline";
+                        link.style.cursor = "pointer";
+                        link.textContent = item.textContent;
+                        item.textContent = "";
+                        item.appendChild(link);
+                    }
+
+                    availDiv.appendChild(item);
+                });
+            });
+
+            infoDiv.appendChild(availDiv);
+        } else if (state === "error") {
+            const errorDiv = document.createElement("div");
+            errorDiv.className = "book-availability";
+            errorDiv.style.color = "#dc3545";
+            errorDiv.textContent = book.message || "Error";
+            infoDiv.appendChild(errorDiv);
+        }
+
+        div.appendChild(indicatorDiv);
+        div.appendChild(infoDiv);
 
         container.appendChild(div);
     });
 
+    // Update summary
+    const total = availableBooks + waitlistBooks + noMatchBooks + errorBooks;
+    let summaryText = total + " analyzed";
 
-    summary.textContent =
-        books.length +
-        " analyzed • " +
-        availableBooks +
-        " with availability • " +
-        waitlistBooks +
-        " with waitlists • " +
-        noMatchBooks +
-        " with no current match";
-}
-
-
-/*
- * Normalize library names returned by Python.
- */
-function normalizeLibraryName(library) {
-
-    if (!library) {
-        return "Other";
+    if (availableBooks > 0) {
+        summaryText += " • " + availableBooks + " available";
     }
 
-    const value =
-        String(library).toLowerCase();
-
-    if (value.includes("oakland")) {
-        return "Oakland";
+    if (waitlistBooks > 0) {
+        summaryText += " • " + waitlistBooks + " waitlist";
     }
 
-    if (value.includes("berkeley")) {
-        return "Berkeley";
+    if (noMatchBooks > 0) {
+        summaryText += " • " + noMatchBooks + " no match";
     }
 
-    return String(library);
-}
-
-
-/*
- * Group results by format + availability/wait status.
- *
- * We don't discard duplicate editions.
- */
-function groupResults(results) {
-
-    const groups = {};
-
-    results.forEach(function(result) {
-
-        const format =
-            result.format ||
-            "Digital";
-
-        let status;
-
-        if (result.available) {
-            status = "available";
-        } else if (result.wait) {
-            status = "waitlist";
-        } else {
-            status = "unavailable";
-        }
-
-        const key =
-            format +
-            "|" +
-            status;
-
-        if (!groups[key]) {
-
-            groups[key] = {
-                format: format,
-                status: status,
-                results: []
-            };
-        }
-
-        groups[key].results.push(
-            result
-        );
-    });
-
-    return Object.values(groups);
-}
-
-
-/*
- * Render one grouped result.
- *
- * Example:
- *
- * Hoopla:
- *   Audiobook ×3 · Available
- *
- * Each individual edition remains clickable.
- */
-function renderResultGroup(group) {
-
-    const results =
-        group.results;
-
-    let statusText = "";
-
-    let statusClass =
-        group.status;
-
-
-    if (group.status === "available") {
-
-        statusText = "Available";
-
-    } else if (group.status === "waitlist") {
-
-        statusText =
-            results[0].wait === "Waitlist"
-                ? "Waitlist"
-                : (
-                    results[0].wait ||
-                    "Waitlist"
-                );
-
-    } else {
-
-        statusText =
-            "Not currently available";
+    if (errorBooks > 0) {
+        summaryText += " • " + errorBooks + " error";
     }
 
-
-    let countText = "";
-
-    if (results.length > 1) {
-
-        countText =
-            " ×" +
-            results.length;
-    }
-
-
-    let html =
-        '<span class="result">';
-
-
-    /*
-     * If there is only one result, make the
-     * format itself the link.
-     */
-    if (results.length === 1) {
-
-        const result =
-            results[0];
-
-        const label =
-            group.format +
-            countText;
-
-        if (result.url) {
-
-            html +=
-                '<a href="' +
-                escapeHtml(result.url) +
-                '" target="_blank" rel="noopener">' +
-                "<strong>" +
-                escapeHtml(label) +
-                "</strong>" +
-                "</a>";
-
-        } else {
-
-            html +=
-                "<strong>" +
-                escapeHtml(label) +
-                "</strong>";
-        }
-
-
-        html +=
-            " · " +
-            '<span class="' +
-            statusClass +
-            '">' +
-            escapeHtml(statusText) +
-            "</span>";
-
-
-        html += "</span>";
-
-        return html;
-    }
-
-
-    /*
-     * Multiple editions:
-     *
-     * Hoopla Audiobook ×3 · Available
-     *
-     * followed by individual links.
-     */
-    html +=
-        "<strong>" +
-        escapeHtml(
-            group.format + countText
-        ) +
-        "</strong>" +
-        " · " +
-        '<span class="' +
-        statusClass +
-        '">' +
-        escapeHtml(statusText) +
-        "</span>";
-
-
-    results.forEach(function(result, index) {
-
-        if (!result.url) {
-            return;
-        }
-
-        html +=
-            " " +
-            '<a href="' +
-            escapeHtml(result.url) +
-            '" target="_blank" rel="noopener">' +
-            "[View " +
-            (index + 1) +
-            "]" +
-            "</a>";
-    });
-
-
-    html += "</span>";
-
-    return html;
+    summary.textContent = summaryText;
 }
 
 
