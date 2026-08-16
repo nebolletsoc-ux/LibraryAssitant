@@ -41,7 +41,7 @@
         }
 
         .summary {
-            margin: 12px 0 16px;
+            margin: 12px 0 20px;
             font-weight: bold;
         }
 
@@ -49,9 +49,8 @@
             display: flex;
             align-items: flex-start;
             gap: 10px;
-            padding: 7px 4px;
+            padding: 10px 4px 12px;
             border-bottom: 1px solid #ddd;
-            line-height: 1.35;
         }
 
         .indicator {
@@ -66,7 +65,7 @@
         }
 
         .indicator.waitlist {
-            color: #d08a00;
+            color: #c27b00;
         }
 
         .indicator.none {
@@ -75,6 +74,7 @@
 
         .book-main {
             flex: 1;
+            min-width: 0;
         }
 
         .book-title {
@@ -85,15 +85,32 @@
             color: #555;
         }
 
-        .results {
-            margin-top: 2px;
-            font-size: 14px;
+        .library-section {
+            margin-top: 6px;
+        }
+
+        .library-name {
+            font-weight: bold;
+            margin-top: 5px;
+            margin-bottom: 2px;
+        }
+
+        .provider-section {
+            margin-left: 12px;
+            margin-bottom: 3px;
+        }
+
+        .provider-name {
+            color: #555;
+            font-size: 13px;
+            margin-right: 5px;
         }
 
         .result {
             display: inline-block;
             margin-right: 12px;
             margin-top: 2px;
+            font-size: 14px;
         }
 
         .available {
@@ -106,6 +123,12 @@
 
         .no-match {
             color: #777;
+        }
+
+        .no-library-match {
+            color: #777;
+            font-size: 13px;
+            margin-left: 12px;
         }
 
         a {
@@ -348,6 +371,7 @@ function renderBooks(books) {
     let waitlistBooks = 0;
     let noMatchBooks = 0;
 
+
     books.forEach(function(book) {
 
         const results =
@@ -426,101 +450,214 @@ function renderBooks(books) {
         }
 
 
-        html += '<div class="results">';
+        /*
+         * Group results first by library, then provider.
+         *
+         * Current expected libraries:
+         *   Oakland
+         *   Berkeley
+         *
+         * Current expected providers:
+         *   Hoopla
+         *   Libby
+         */
+        const libraries = {};
+
+        results.forEach(function(result) {
+
+            const library =
+                normalizeLibraryName(
+                    result.library
+                );
+
+            const provider =
+                result.provider ||
+                "Other";
+
+            if (!libraries[library]) {
+                libraries[library] = {};
+            }
+
+            if (!libraries[library][provider]) {
+                libraries[library][provider] = [];
+            }
+
+            libraries[library][provider].push(
+                result
+            );
+        });
 
 
-        if (results.length === 0) {
+        html += '<div class="library-section">';
+
+
+        /*
+         * Always show the two libraries so that
+         * it is immediately clear where results
+         * were and were not found.
+         */
+        const libraryOrder = [
+            "Oakland",
+            "Berkeley"
+        ];
+
+
+        let anyLibraryResult = false;
+
+
+        libraryOrder.forEach(function(libraryName) {
+
+            const providerGroups =
+                libraries[libraryName];
 
             html +=
-                '<span class="no-match">' +
-                "No current match" +
-                "</span>";
-
-        } else {
-
-            results.forEach(function(result) {
-
-                const provider =
-                    result.provider || "";
-
-                const format =
-                    result.format || "";
-
-                const label =
-                    provider +
-                    (format ? " " + format : "");
-
-                let statusText = "";
-
-                let statusClass = "";
+                '<div class="library-name">' +
+                escapeHtml(libraryName) +
+                "</div>";
 
 
-                if (result.available) {
+            if (
+                !providerGroups ||
+                Object.keys(providerGroups).length === 0
+            ) {
 
-                    statusText = "Available";
-                    statusClass = "available";
+                html +=
+                    '<div class="no-library-match">' +
+                    "No current match" +
+                    "</div>";
 
-                } else if (result.wait) {
+                return;
+            }
 
-                    statusText =
-                        result.wait === "Waitlist"
-                            ? "Waitlist"
-                            : result.wait;
 
-                    statusClass = "waitlist";
+            anyLibraryResult = true;
 
-                } else {
 
-                    statusText =
-                        "Not currently available";
+            const providerOrder = [
+                "Libby",
+                "Hoopla"
+            ];
 
-                    statusClass = "waitlist";
+
+            const providers =
+                Object.keys(providerGroups);
+
+
+            const orderedProviders =
+                providerOrder
+                    .filter(
+                        provider =>
+                            providers.includes(provider)
+                    )
+                    .concat(
+                        providers.filter(
+                            provider =>
+                                !providerOrder.includes(
+                                    provider
+                                )
+                        )
+                    );
+
+
+            orderedProviders.forEach(
+                function(provider) {
+
+                    const providerResults =
+                        providerGroups[provider];
+
+
+                    html +=
+                        '<div class="provider-section">';
+
+                    html +=
+                        '<span class="provider-name">' +
+                        escapeHtml(provider) +
+                        ":</span>";
+
+
+                    /*
+                     * Group identical format/status
+                     * results, but retain every URL.
+                     *
+                     * This produces:
+                     *
+                     * Hoopla: Audiobook ×3 · Available
+                     *
+                     * while keeping individual links
+                     * underneath.
+                     */
+                    const groups =
+                        groupResults(
+                            providerResults
+                        );
+
+
+                    groups.forEach(
+                        function(group) {
+
+                            html +=
+                                renderResultGroup(
+                                    group
+                                );
+                        }
+                    );
+
+
+                    html += "</div>";
                 }
+            );
+        });
 
 
-                let resultHtml = "";
+        /*
+         * If there were somehow a library name other
+         * than Oakland/Berkeley, don't silently lose it.
+         */
+        Object.keys(libraries)
+            .filter(
+                name =>
+                    !libraryOrder.includes(name)
+            )
+            .forEach(function(libraryName) {
 
-                if (result.url) {
+                const providerGroups =
+                    libraries[libraryName];
 
-                    resultHtml =
-                        '<span class="result">' +
-                        '<a href="' +
-                        escapeHtml(result.url) +
-                        '" target="_blank" rel="noopener">' +
-                        "<strong>" +
-                        escapeHtml(label) +
-                        "</strong>" +
-                        "</a>" +
-                        " · " +
-                        '<span class="' +
-                        statusClass +
-                        '">' +
-                        escapeHtml(statusText) +
-                        "</span>" +
-                        "</span>";
+                html +=
+                    '<div class="library-name">' +
+                    escapeHtml(libraryName) +
+                    "</div>";
 
-                } else {
+                Object.keys(providerGroups)
+                    .forEach(function(provider) {
 
-                    resultHtml =
-                        '<span class="result">' +
-                        "<strong>" +
-                        escapeHtml(label) +
-                        "</strong>" +
-                        " · " +
-                        '<span class="' +
-                        statusClass +
-                        '">' +
-                        escapeHtml(statusText) +
-                        "</span>" +
-                        "</span>";
-                }
+                        html +=
+                            '<div class="provider-section">' +
+                            '<span class="provider-name">' +
+                            escapeHtml(provider) +
+                            ":</span>";
 
+                        groupResults(
+                            providerGroups[provider]
+                        ).forEach(
+                            function(group) {
+                                html +=
+                                    renderResultGroup(
+                                        group
+                                    );
+                            }
+                        );
 
-                html += resultHtml;
+                        html += "</div>";
+                    });
             });
-        }
 
 
+        /*
+         * If there are absolutely no results,
+         * the library sections above already say
+         * "No current match."
+         */
         html += "</div>";
 
         html += "</div>";
@@ -531,11 +668,8 @@ function renderBooks(books) {
     });
 
 
-    const analyzed =
-        books.length;
-
     summary.textContent =
-        analyzed +
+        books.length +
         " analyzed • " +
         availableBooks +
         " with availability • " +
@@ -543,6 +677,227 @@ function renderBooks(books) {
         " with waitlists • " +
         noMatchBooks +
         " with no current match";
+}
+
+
+/*
+ * Normalize library names returned by Python.
+ */
+function normalizeLibraryName(library) {
+
+    if (!library) {
+        return "Other";
+    }
+
+    const value =
+        String(library).toLowerCase();
+
+    if (value.includes("oakland")) {
+        return "Oakland";
+    }
+
+    if (value.includes("berkeley")) {
+        return "Berkeley";
+    }
+
+    return String(library);
+}
+
+
+/*
+ * Group results by format + availability/wait status.
+ *
+ * We don't discard duplicate editions.
+ */
+function groupResults(results) {
+
+    const groups = {};
+
+    results.forEach(function(result) {
+
+        const format =
+            result.format ||
+            "Digital";
+
+        let status;
+
+        if (result.available) {
+            status = "available";
+        } else if (result.wait) {
+            status = "waitlist";
+        } else {
+            status = "unavailable";
+        }
+
+        const key =
+            format +
+            "|" +
+            status;
+
+        if (!groups[key]) {
+
+            groups[key] = {
+                format: format,
+                status: status,
+                results: []
+            };
+        }
+
+        groups[key].results.push(
+            result
+        );
+    });
+
+    return Object.values(groups);
+}
+
+
+/*
+ * Render one grouped result.
+ *
+ * Example:
+ *
+ * Hoopla:
+ *   Audiobook ×3 · Available
+ *
+ * Each individual edition remains clickable.
+ */
+function renderResultGroup(group) {
+
+    const results =
+        group.results;
+
+    let statusText = "";
+
+    let statusClass =
+        group.status;
+
+
+    if (group.status === "available") {
+
+        statusText = "Available";
+
+    } else if (group.status === "waitlist") {
+
+        statusText =
+            results[0].wait === "Waitlist"
+                ? "Waitlist"
+                : (
+                    results[0].wait ||
+                    "Waitlist"
+                );
+
+    } else {
+
+        statusText =
+            "Not currently available";
+    }
+
+
+    let countText = "";
+
+    if (results.length > 1) {
+
+        countText =
+            " ×" +
+            results.length;
+    }
+
+
+    let html =
+        '<span class="result">';
+
+
+    /*
+     * If there is only one result, make the
+     * format itself the link.
+     */
+    if (results.length === 1) {
+
+        const result =
+            results[0];
+
+        const label =
+            group.format +
+            countText;
+
+        if (result.url) {
+
+            html +=
+                '<a href="' +
+                escapeHtml(result.url) +
+                '" target="_blank" rel="noopener">' +
+                "<strong>" +
+                escapeHtml(label) +
+                "</strong>" +
+                "</a>";
+
+        } else {
+
+            html +=
+                "<strong>" +
+                escapeHtml(label) +
+                "</strong>";
+        }
+
+
+        html +=
+            " · " +
+            '<span class="' +
+            statusClass +
+            '">' +
+            escapeHtml(statusText) +
+            "</span>";
+
+
+        html += "</span>";
+
+        return html;
+    }
+
+
+    /*
+     * Multiple editions:
+     *
+     * Hoopla Audiobook ×3 · Available
+     *
+     * followed by individual links.
+     */
+    html +=
+        "<strong>" +
+        escapeHtml(
+            group.format + countText
+        ) +
+        "</strong>" +
+        " · " +
+        '<span class="' +
+        statusClass +
+        '">' +
+        escapeHtml(statusText) +
+        "</span>";
+
+
+    results.forEach(function(result, index) {
+
+        if (!result.url) {
+            return;
+        }
+
+        html +=
+            " " +
+            '<a href="' +
+            escapeHtml(result.url) +
+            '" target="_blank" rel="noopener">' +
+            "[View " +
+            (index + 1) +
+            "]" +
+            "</a>";
+    });
+
+
+    html += "</span>";
+
+    return html;
 }
 
 
