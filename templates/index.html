@@ -485,6 +485,14 @@ function rerenderBooks() {
 }
 
 
+// Tags column may hold multiple comma-separated tags; use the first as the genre
+function getPrimaryGenre(genre) {
+    if (!genre) return null;
+    const first = genre.split(",")[0].trim();
+    return first || null;
+}
+
+
 function startPolling() {
 
     if (statusTimer) {
@@ -642,11 +650,13 @@ function renderBooks(books, isFiltering) {
         });
     } else if (currentFilters.sort === "genre") {
         filteredBooks.sort(function(a, b) {
+            const aGenre = getPrimaryGenre(a.genre);
+            const bGenre = getPrimaryGenre(b.genre);
             // Books without a genre sort to the end
-            if (!a.genre && !b.genre) return 0;
-            if (!a.genre) return 1;
-            if (!b.genre) return -1;
-            return a.genre.localeCompare(b.genre);
+            if (!aGenre && !bGenre) return 0;
+            if (!aGenre) return 1;
+            if (!bGenre) return -1;
+            return aGenre.localeCompare(bGenre);
         });
     } else if (currentFilters.sort === "availability") {
         filteredBooks.sort(function(a, b) {
@@ -664,11 +674,24 @@ function renderBooks(books, isFiltering) {
     let waitlistBooks = 0;
     let noMatchBooks = 0;
     let errorBooks = 0;
+    let lastGenreHeader = undefined;
 
     filteredBooks.forEach(function(book) {
 
         const results = book.oakland || [];
         const state = book.state || "unknown";
+
+        // Section headers when grouping by genre
+        if (currentFilters.sort === "genre") {
+            const genre = getPrimaryGenre(book.genre) || "Uncategorized";
+            if (genre !== lastGenreHeader) {
+                lastGenreHeader = genre;
+                const header = document.createElement("div");
+                header.style.cssText = "font-weight: 600; font-size: 13px; color: #555; margin: 14px 0 4px 0; text-transform: capitalize;";
+                header.textContent = genre;
+                container.appendChild(header);
+            }
+        }
 
         // Count statuses and build availability info
         const availableResults = results.filter(r => r.available);
@@ -738,6 +761,14 @@ function renderBooks(books, isFiltering) {
         authorSpan.textContent = book.author || "";
 
         titleDiv.appendChild(titleSpan);
+
+        const primaryGenre = getPrimaryGenre(book.genre);
+        if (primaryGenre) {
+            const genreBadge = document.createElement("span");
+            genreBadge.style.cssText = "display: inline-block; margin-left: 6px; padding: 1px 6px; font-size: 10px; text-transform: capitalize; background: #eef0f3; color: #555; border-radius: 10px; vertical-align: middle;";
+            genreBadge.textContent = primaryGenre;
+            titleDiv.appendChild(genreBadge);
+        }
         titleDiv.appendChild(authorSpan);
 
         infoDiv.appendChild(titleDiv);
