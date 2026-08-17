@@ -387,4 +387,6 @@ def status():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # host="0.0.0.0" makes this reachable from other devices (e.g. your phone) on the same Wi-Fi
+    # port 5001 avoids colliding with macOS's AirPlay Receiver, which uses 5000
+    app.run(debug=True, host="0.0.0.0", port=5001)
