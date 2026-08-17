@@ -349,6 +349,15 @@
 
 <div id="books-container"></div>
 
+<div id="synopsis-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; padding: 16px;">
+    <div style="background: white; border-radius: 8px; max-width: 500px; width: 100%; max-height: 80vh; overflow-y: auto; padding: 20px; position: relative;">
+        <button id="synopsis-close" style="position: absolute; top: 12px; right: 12px; background: none; border: none; font-size: 20px; cursor: pointer; color: #666; line-height: 1;">&times;</button>
+        <h2 id="synopsis-title" style="margin: 0 4px 4px 0; font-size: 18px; padding-right: 24px;"></h2>
+        <p id="synopsis-author" style="margin: 0 0 12px 0; color: #666; font-size: 14px;"></p>
+        <p id="synopsis-body" style="margin: 0; font-size: 14px; line-height: 1.6; color: #333; white-space: pre-wrap;"></p>
+    </div>
+</div>
+
 
 <script>
 
@@ -701,6 +710,15 @@ function renderBooks(books, isFiltering) {
         titleSpan.className = "book-title";
         titleSpan.textContent = book.title;
 
+        if (book.synopsis) {
+            titleSpan.style.cursor = "pointer";
+            titleSpan.style.textDecoration = "underline";
+            titleSpan.title = "Click to read synopsis";
+            titleSpan.addEventListener("click", function() {
+                openSynopsisModal(book.title, book.author, book.synopsis);
+            });
+        }
+
         const authorSpan = document.createElement("span");
         authorSpan.className = "author";
         authorSpan.textContent = book.author || "";
@@ -820,35 +838,6 @@ function renderBooks(books, isFiltering) {
             infoDiv.appendChild(errorDiv);
         }
 
-        // Add synopsis section if available
-        if (book.synopsis) {
-            const synopsisContainer = document.createElement("div");
-            synopsisContainer.style.marginTop = "8px";
-            
-            const synopsisButton = document.createElement("button");
-            synopsisButton.style.cssText = "background: none; border: none; color: #0366d6; cursor: pointer; padding: 0; font-size: 12px; text-decoration: underline; text-align: left;";
-            synopsisButton.textContent = "Show synopsis";
-            
-            const synopsisText = document.createElement("div");
-            synopsisText.style.cssText = "display: none; margin-top: 8px; padding: 8px; background: #f5f5f5; border-left: 3px solid #ddd; font-size: 13px; line-height: 1.5; color: #444;";
-            synopsisText.textContent = book.synopsis;
-            
-            synopsisButton.addEventListener("click", function(e) {
-                e.preventDefault();
-                if (synopsisText.style.display === "none") {
-                    synopsisText.style.display = "block";
-                    synopsisButton.textContent = "Hide synopsis";
-                } else {
-                    synopsisText.style.display = "none";
-                    synopsisButton.textContent = "Show synopsis";
-                }
-            });
-            
-            synopsisContainer.appendChild(synopsisButton);
-            synopsisContainer.appendChild(synopsisText);
-            infoDiv.appendChild(synopsisContainer);
-        }
-
         div.appendChild(indicatorDiv);
         div.appendChild(infoDiv);
 
@@ -877,6 +866,25 @@ function renderBooks(books, isFiltering) {
 
     summary.textContent = summaryText;
 }
+
+
+function openSynopsisModal(title, author, synopsis) {
+    document.getElementById("synopsis-title").textContent = title;
+    document.getElementById("synopsis-author").textContent = author || "";
+    document.getElementById("synopsis-body").textContent = synopsis;
+    document.getElementById("synopsis-overlay").style.display = "flex";
+}
+
+function closeSynopsisModal() {
+    document.getElementById("synopsis-overlay").style.display = "none";
+}
+
+document.getElementById("synopsis-close").addEventListener("click", closeSynopsisModal);
+document.getElementById("synopsis-overlay").addEventListener("click", function(e) {
+    if (e.target === this) {
+        closeSynopsisModal();
+    }
+});
 
 
 function escapeHtml(value) {
