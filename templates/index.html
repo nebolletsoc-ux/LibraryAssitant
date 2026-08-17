@@ -268,7 +268,10 @@
 
 <body>
 
-<h1>Library Assistant</h1>
+<div style="display: flex; align-items: center; justify-content: space-between;">
+    <h1>Library Assistant</h1>
+    <button id="config-gear" title="Library settings" style="background: none; border: none; font-size: 22px; cursor: pointer; padding: 4px 8px; line-height: 1;">⚙️</button>
+</div>
 
 <p>
     This page shows your StoryGraph or Goodreads
@@ -289,20 +292,6 @@
         accept=".csv,text/csv"
         required
     >
-
-    <div style="margin-top: 12px; padding: 10px; background: #f5f5f5; border-radius: 4px;">
-        <label style="font-weight: 500; display: block; margin-bottom: 8px;">Search libraries:</label>
-        <div style="display: flex; gap: 16px;">
-            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: normal;">
-                <input type="checkbox" id="lib-oakland" checked style="cursor: pointer;">
-                Oakland
-            </label>
-            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: normal;">
-                <input type="checkbox" id="lib-berkeley" checked style="cursor: pointer;">
-                Berkeley
-            </label>
-        </div>
-    </div>
 
 </form>
 
@@ -360,6 +349,26 @@
     </div>
 </div>
 
+<div id="config-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; padding: 16px;">
+    <div style="background: white; border-radius: 8px; max-width: 420px; width: 100%; padding: 20px;">
+        <h2 style="margin: 0 0 4px 0; font-size: 18px;">Library settings</h2>
+        <p style="margin: 0 0 16px 0; color: #666; font-size: 13px;">
+            Choose which libraries to search. No login is required — we only check public catalog availability.
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: normal;">
+                <input type="checkbox" id="lib-oakland" checked style="cursor: pointer;">
+                Oakland Public Library
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: normal;">
+                <input type="checkbox" id="lib-berkeley" checked style="cursor: pointer;">
+                Berkeley Public Library
+            </label>
+        </div>
+        <button id="config-save" style="width: 100%; padding: 10px; background: #0366d6; color: white; border: none; border-radius: 4px; font-size: 14px; cursor: pointer;">Save & Continue</button>
+    </div>
+</div>
+
 
 <script>
 
@@ -371,6 +380,50 @@ let currentFilters = {
     availability: "available",
     sort: "availability"
 };
+
+
+// Library configuration (persisted across visits)
+const LIBRARY_CONFIG_KEY = "libraryAssistant.libraries";
+
+function loadLibraryConfig() {
+    try {
+        const raw = localStorage.getItem(LIBRARY_CONFIG_KEY);
+        if (raw) {
+            return JSON.parse(raw);
+        }
+    } catch (e) {
+        // Fall through to default
+    }
+    return null;
+}
+
+function saveLibraryConfig(config) {
+    localStorage.setItem(LIBRARY_CONFIG_KEY, JSON.stringify(config));
+}
+
+function openConfigModal() {
+    const config = loadLibraryConfig() || { oakland: true, berkeley: true };
+    document.getElementById("lib-oakland").checked = config.oakland;
+    document.getElementById("lib-berkeley").checked = config.berkeley;
+    document.getElementById("config-overlay").style.display = "flex";
+}
+
+function closeConfigModal() {
+    const config = {
+        oakland: document.getElementById("lib-oakland").checked,
+        berkeley: document.getElementById("lib-berkeley").checked
+    };
+    saveLibraryConfig(config);
+    document.getElementById("config-overlay").style.display = "none";
+}
+
+document.getElementById("config-gear").addEventListener("click", openConfigModal);
+document.getElementById("config-save").addEventListener("click", closeConfigModal);
+
+// First-time visitors see the config modal before they can upload a CSV
+if (!loadLibraryConfig()) {
+    openConfigModal();
+}
 
 
 // Auto-submit when file is selected
@@ -399,10 +452,11 @@ document
 
         formData.append("books_file", file);
         
-        // Add selected libraries
+        // Add selected libraries from saved config
+        const libraryConfig = loadLibraryConfig() || { oakland: true, berkeley: true };
         const selectedLibraries = [];
-        if (document.getElementById("lib-oakland").checked) selectedLibraries.push("oakland");
-        if (document.getElementById("lib-berkeley").checked) selectedLibraries.push("berkeley");
+        if (libraryConfig.oakland) selectedLibraries.push("oakland");
+        if (libraryConfig.berkeley) selectedLibraries.push("berkeley");
         formData.append("libraries", selectedLibraries.join(","));
 
         try {
