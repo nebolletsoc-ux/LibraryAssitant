@@ -107,6 +107,7 @@ def load_books(csv_file):
             author = (row.get("Authors") or "").strip()
             read_status = (row.get("Read Status") or "").strip().lower()
             csv_isbn = (row.get("ISBN/UID") or "").strip()  # Extract ISBN from CSV if available
+            genre = (row.get("Tags") or "").strip()  # StoryGraph has no dedicated genre column; Tags is closest
 
             # Only analyze StoryGraph books marked "to-read"
             if read_status != "to-read":
@@ -121,6 +122,7 @@ def load_books(csv_file):
                 "author": author,
                 "isbn": csv_isbn or None,  # Use ISBN from CSV; will look up if empty
                 "synopsis": None,  # Will be fetched during analysis
+                "genre": genre or None,
                 "oakland": [],
                 "state": "waiting",
                 "message": "Waiting to be analyzed",
@@ -153,6 +155,7 @@ def serialize_book(book):
         "author": book["author"],
         "isbn": book["isbn"],
         "synopsis": book.get("synopsis"),
+        "genre": book.get("genre"),
         "state": book["state"],
         "message": book["message"],
         "oakland": [
@@ -194,13 +197,12 @@ def analyze_book(job_id, index):
                 print(f"ISBN lookup failed for '{title}': {error_type} - {e}")
                 return
 
-        # Fetch synopsis from Open Library if ISBN available
+        # Fetch synopsis in the background so it never slows down library search
         if isbn:
-            book["message"] = "Fetching synopsis…"
-            synopsis = fetch_synopsis(isbn, title, author)
-            if synopsis:
-                book["synopsis"] = synopsis
-                print(f"Synopsis: {synopsis[:100]}...")
+            threading.Thread(
+                target=lambda: book.update(synopsis=fetch_synopsis(isbn, title, author)),
+                daemon=True,
+            ).start()
 
         book["message"] = "Checking libraries…"
 
