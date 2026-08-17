@@ -2,6 +2,7 @@ import csv
 import io
 import threading
 import time
+import requests
 from concurrent.futures import ThreadPoolExecutor
 
 from flask import Flask, render_template, request, jsonify
@@ -53,6 +54,32 @@ def categorize_error(error):
     # Default
     return "unknown", f"Error: {error}"
 
+
+def fetch_synopsis(isbn, title, author):
+    """Fetch book synopsis from Open Library API."""
+    if not isbn:
+        return None
+    
+    try:
+        # Try by ISBN first (with short timeout for network-restricted environments)
+        url = f"https://openlibrary.org/api/books?bibkeys=ISBN:{isbn}&jscmd=data&format=json"
+        response = requests.get(url, timeout=2)  # Reduced from 5 to 2 seconds
+        response.raise_for_status()
+        
+        data = response.json()
+        for key, book_data in data.items():
+            if "description" in book_data:
+                desc = book_data["description"]
+                # Handle both string and dict descriptions
+                if isinstance(desc, dict) and "value" in desc:
+                    return desc["value"]
+                return str(desc) if desc else None
+        
+        return None
+    except Exception as e:
+        print(f"Synopsis fetch failed for {title}: {e}")
+        return None
+
 def load_books(csv_file):
     """Load and validate books from CSV. Raises ValueError on validation failure."""
     try:
@@ -93,6 +120,7 @@ def load_books(csv_file):
                 "title": title,
                 "author": author,
                 "isbn": csv_isbn or None,  # Use ISBN from CSV; will look up if empty
+                "synopsis": None,  # Will be fetched during analysis
                 "oakland": [],
                 "state": "waiting",
                 "message": "Waiting to be analyzed",
@@ -124,6 +152,7 @@ def serialize_book(book):
         "title": book["title"],
         "author": book["author"],
         "isbn": book["isbn"],
+        "synopsis": book.get("synopsis"),
         "state": book["state"],
         "message": book["message"],
         "oakland": [
@@ -165,7 +194,15 @@ def analyze_book(job_id, index):
                 print(f"ISBN lookup failed for '{title}': {error_type} - {e}")
                 return
 
-        book["message"] = "Checking Oakland Library…"
+        # Fetch synopsis from Open Library if ISBN available
+        if isbn:
+            book["message"] = "Fetching synopsis…"
+            synopsis = fetch_synopsis(isbn, title, author)
+            if synopsis:
+                book["synopsis"] = synopsis
+                print(f"Synopsis: {synopsis[:100]}...")
+
+        book["message"] = "Checking libraries…"
 
         try:
             if isbn:
