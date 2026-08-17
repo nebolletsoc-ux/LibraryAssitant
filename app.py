@@ -1,5 +1,6 @@
 import csv
 import io
+import json
 import threading
 import time
 import requests
@@ -8,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, render_template, request, jsonify
 
 from library.isbn import find_isbn
-from library.oakland import search
+from library.oakland import search_libraries
 
 
 app = Flask(__name__)
@@ -19,6 +20,14 @@ JOB_TIMEOUT_SECONDS = 3600  # Clean up jobs after 1 hour
 executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
 
 jobs = {}
+
+# Known libraries the app ships with. Any Bibliocommons/OverDrive library
+# can be added by a user as a "custom" entry without needing new code here.
+LIBRARY_PRESETS = {
+    "oakland": {"key": "oakland", "label": "Oakland Public Library", "bibliocommons": "oaklandlibrary", "hoopla": True},
+    "berkeley": {"key": "berkeley", "label": "Berkeley Public Library", "overdrive": "berkeleypubliclibrary"},
+    "redwood_city": {"key": "redwood_city", "label": "Redwood City Public Library", "bibliocommons": "rcpl"},
+}
 
 
 def validate_csv_structure(fieldnames):
@@ -217,28 +226,20 @@ def analyze_book(job_id, index):
 
         try:
             if isbn:
-                # Check which libraries are selected
-                selected_libs = job.get("selected_libraries", ["oakland", "berkeley"])
-                oakland = search(title, author) if selected_libs else []
+                library_configs = job.get("library_configs") or [LIBRARY_PRESETS["oakland"], LIBRARY_PRESETS["berkeley"]]
+                results = search_libraries(title, author, library_configs)
             else:
-                oakland = []
+                results = []
                 book["message"] = "ISBN not found; skipped library search."
         except Exception as e:
             error_type, error_msg = categorize_error(e)
             book["state"] = "error"
             book["message"] = error_msg
-            print(f"Oakland search failed for '{title}': {error_type} - {e}")
+            print(f"Library search failed for '{title}': {error_type} - {e}")
             return
 
-        # Filter results by selected libraries
-        selected_libs = job.get("selected_libraries", ["oakland", "berkeley"])
-        filtered_oakland = [
-            result for result in oakland
-            if (result.library or "").lower() in selected_libs
-        ]
-        
-        book["oakland"] = filtered_oakland
-        print(f"Oakland (filtered): {filtered_oakland}")
+        book["oakland"] = results
+        print(f"Results: {results}")
 
         book["state"] = "complete"
         book["message"] = "Complete"
@@ -289,16 +290,38 @@ def home():
         }), 400
 
     job_id = str(id(books))
-    
-    # Get selected libraries from request
-    selected_libraries = request.form.get("libraries", "oakland,berkeley").split(",")
-    selected_libraries = [lib.strip().lower() for lib in selected_libraries if lib.strip()]
+
+    # Get selected libraries from request: JSON array of configs, e.g.
+    # [{"key": "oakland", "bibliocommons": "oaklandlibrary", "hoopla": true}, ...]
+    # Preset keys are re-resolved server-side so custom entries can't spoof a preset's config.
+    try:
+        raw_configs = json.loads(request.form.get("libraries", "[]"))
+    except (ValueError, TypeError):
+        raw_configs = []
+
+    library_configs = []
+    for entry in raw_configs:
+        if not isinstance(entry, dict):
+            continue
+        key = (entry.get("key") or "").strip().lower()
+        if key in LIBRARY_PRESETS:
+            library_configs.append(LIBRARY_PRESETS[key])
+        elif key:
+            library_configs.append({
+                "key": key,
+                "bibliocommons": (entry.get("bibliocommons") or "").strip() or None,
+                "overdrive": (entry.get("overdrive") or "").strip() or None,
+                "hoopla": bool(entry.get("hoopla")),
+            })
+
+    if not library_configs:
+        library_configs = [LIBRARY_PRESETS["oakland"], LIBRARY_PRESETS["berkeley"]]
 
     jobs[job_id] = {
         "books": books,
         "completed": 0,
         "created_at": time.time(),
-        "selected_libraries": selected_libraries,
+        "library_configs": library_configs,
         "lock": threading.Lock(),
     }
 

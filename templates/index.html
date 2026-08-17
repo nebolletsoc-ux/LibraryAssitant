@@ -350,12 +350,12 @@
 </div>
 
 <div id="config-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; padding: 16px;">
-    <div style="background: white; border-radius: 8px; max-width: 420px; width: 100%; padding: 20px;">
+    <div style="background: white; border-radius: 8px; max-width: 420px; width: 100%; max-height: 85vh; overflow-y: auto; padding: 20px;">
         <h2 style="margin: 0 0 4px 0; font-size: 18px;">Library settings</h2>
         <p style="margin: 0 0 16px 0; color: #666; font-size: 13px;">
             Choose which libraries to search. No login is required — we only check public catalog availability.
         </p>
-        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
+        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: normal;">
                 <input type="checkbox" id="lib-oakland" checked style="cursor: pointer;">
                 Oakland Public Library
@@ -364,7 +364,28 @@
                 <input type="checkbox" id="lib-berkeley" checked style="cursor: pointer;">
                 Berkeley Public Library
             </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: normal;">
+                <input type="checkbox" id="lib-redwood_city" style="cursor: pointer;">
+                Redwood City Public Library
+            </label>
         </div>
+
+        <div id="custom-library-list" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;"></div>
+
+        <details style="margin-bottom: 16px;">
+            <summary style="cursor: pointer; font-size: 13px; color: #0366d6;">Add another library</summary>
+            <div style="margin-top: 10px; padding: 10px; background: #f5f5f5; border-radius: 4px; display: flex; flex-direction: column; gap: 8px;">
+                <p style="margin: 0; font-size: 12px; color: #666;">
+                    Works for any library on Bibliocommons or OverDrive/Libby. Find the subdomain in your library's catalog URL
+                    (e.g. "oaklandlibrary" from oaklandlibrary.bibliocommons.com).
+                </p>
+                <input id="custom-lib-name" type="text" placeholder="Library name" style="padding: 6px; font-size: 13px; border: 1px solid #ddd; border-radius: 4px;">
+                <input id="custom-lib-bibliocommons" type="text" placeholder="Bibliocommons subdomain (optional)" style="padding: 6px; font-size: 13px; border: 1px solid #ddd; border-radius: 4px;">
+                <input id="custom-lib-overdrive" type="text" placeholder="OverDrive/Libby subdomain (optional)" style="padding: 6px; font-size: 13px; border: 1px solid #ddd; border-radius: 4px;">
+                <button id="custom-lib-add" type="button" style="padding: 6px; background: #eef0f3; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; cursor: pointer;">Add library</button>
+            </div>
+        </details>
+
         <button id="config-save" style="width: 100%; padding: 10px; background: #0366d6; color: white; border: none; border-radius: 4px; font-size: 14px; cursor: pointer;">Save & Continue</button>
     </div>
 </div>
@@ -384,6 +405,7 @@ let currentFilters = {
 
 // Library configuration (persisted across visits)
 const LIBRARY_CONFIG_KEY = "libraryAssistant.libraries";
+const PRESET_LIBRARIES = ["oakland", "berkeley", "redwood_city"];
 
 function loadLibraryConfig() {
     try {
@@ -401,24 +423,106 @@ function saveLibraryConfig(config) {
     localStorage.setItem(LIBRARY_CONFIG_KEY, JSON.stringify(config));
 }
 
+function renderCustomLibraryList(customLibraries) {
+    const list = document.getElementById("custom-library-list");
+    list.innerHTML = "";
+
+    customLibraries.forEach(function(lib, index) {
+        const row = document.createElement("div");
+        row.style.cssText = "display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; background: #f5f5f5; border-radius: 4px; font-size: 13px;";
+
+        const label = document.createElement("span");
+        label.textContent = lib.name || lib.key;
+
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.textContent = "Remove";
+        removeBtn.style.cssText = "background: none; border: none; color: #dc3545; cursor: pointer; font-size: 12px;";
+        removeBtn.addEventListener("click", function() {
+            customLibraries.splice(index, 1);
+            renderCustomLibraryList(customLibraries);
+        });
+
+        row.appendChild(label);
+        row.appendChild(removeBtn);
+        list.appendChild(row);
+    });
+}
+
+let modalCustomLibraries = [];
+
 function openConfigModal() {
-    const config = loadLibraryConfig() || { oakland: true, berkeley: true };
-    document.getElementById("lib-oakland").checked = config.oakland;
-    document.getElementById("lib-berkeley").checked = config.berkeley;
+    const config = loadLibraryConfig() || { oakland: true, berkeley: true, redwood_city: false, custom: [] };
+    document.getElementById("lib-oakland").checked = !!config.oakland;
+    document.getElementById("lib-berkeley").checked = !!config.berkeley;
+    document.getElementById("lib-redwood_city").checked = !!config.redwood_city;
+
+    modalCustomLibraries = (config.custom || []).slice();
+    renderCustomLibraryList(modalCustomLibraries);
+
     document.getElementById("config-overlay").style.display = "flex";
 }
 
 function closeConfigModal() {
     const config = {
         oakland: document.getElementById("lib-oakland").checked,
-        berkeley: document.getElementById("lib-berkeley").checked
+        berkeley: document.getElementById("lib-berkeley").checked,
+        redwood_city: document.getElementById("lib-redwood_city").checked,
+        custom: modalCustomLibraries
     };
     saveLibraryConfig(config);
     document.getElementById("config-overlay").style.display = "none";
 }
 
+// Builds the JSON payload sent to the backend: presets by key, custom by full config
+function buildLibraryConfigPayload(config) {
+    const payload = [];
+    PRESET_LIBRARIES.forEach(function(key) {
+        if (config[key]) {
+            payload.push({ key: key });
+        }
+    });
+    (config.custom || []).forEach(function(lib) {
+        payload.push({
+            key: lib.key,
+            bibliocommons: lib.bibliocommons || null,
+            overdrive: lib.overdrive || null,
+            hoopla: false
+        });
+    });
+    return payload;
+}
+
 document.getElementById("config-gear").addEventListener("click", openConfigModal);
 document.getElementById("config-save").addEventListener("click", closeConfigModal);
+
+document.getElementById("custom-lib-add").addEventListener("click", function() {
+    const nameInput = document.getElementById("custom-lib-name");
+    const bibliocommonsInput = document.getElementById("custom-lib-bibliocommons");
+    const overdriveInput = document.getElementById("custom-lib-overdrive");
+
+    const name = nameInput.value.trim();
+    const bibliocommons = bibliocommonsInput.value.trim();
+    const overdrive = overdriveInput.value.trim();
+
+    if (!name || (!bibliocommons && !overdrive)) {
+        alert("Enter a library name and at least one subdomain.");
+        return;
+    }
+
+    modalCustomLibraries.push({
+        key: name.toLowerCase().replace(/[^a-z0-9]+/g, "_"),
+        name: name,
+        bibliocommons: bibliocommons || null,
+        overdrive: overdrive || null
+    });
+
+    renderCustomLibraryList(modalCustomLibraries);
+
+    nameInput.value = "";
+    bibliocommonsInput.value = "";
+    overdriveInput.value = "";
+});
 
 // First-time visitors see the config modal before they can upload a CSV
 if (!loadLibraryConfig()) {
@@ -453,11 +557,8 @@ document
         formData.append("books_file", file);
         
         // Add selected libraries from saved config
-        const libraryConfig = loadLibraryConfig() || { oakland: true, berkeley: true };
-        const selectedLibraries = [];
-        if (libraryConfig.oakland) selectedLibraries.push("oakland");
-        if (libraryConfig.berkeley) selectedLibraries.push("berkeley");
-        formData.append("libraries", selectedLibraries.join(","));
+        const libraryConfig = loadLibraryConfig() || { oakland: true, berkeley: true, custom: [] };
+        formData.append("libraries", JSON.stringify(buildLibraryConfigPayload(libraryConfig)));
 
         try {
 
@@ -893,6 +994,11 @@ function renderBooks(books, isFiltering) {
                         libShort = "O";
                     } else if (libShort.toLowerCase() === "berkeley") {
                         libShort = "B";
+                    } else if (libShort.toLowerCase() === "redwood_city") {
+                        libShort = "RC";
+                    } else {
+                        // Custom libraries: use initials of each word
+                        libShort = libShort.split(/[_\s]+/).map(w => w[0] || "").join("").toUpperCase();
                     }
 
                     // Provider
