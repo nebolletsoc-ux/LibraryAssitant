@@ -577,7 +577,8 @@ function renderBooks(books, isFiltering) {
                 if (currentFilters.format === "audiobook") {
                     formatMatches = fmt.includes("audio");
                 } else if (currentFilters.format === "ebook") {
-                    formatMatches = fmt.includes("ebook") || fmt.includes("book");
+                    // Match eBook but NOT Audiobook (which also contains "book")
+                    formatMatches = fmt.includes("ebook") && !fmt.includes("audio");
                 }
             }
             
