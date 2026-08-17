@@ -56,29 +56,35 @@ def categorize_error(error):
 
 
 def fetch_synopsis(isbn, title, author):
-    """Fetch book synopsis from Open Library API."""
+    """Fetch synopsis and genre (subjects) from Open Library API in one request."""
     if not isbn:
-        return None
-    
+        return None, None
+
     try:
         # Try by ISBN first (with short timeout for network-restricted environments)
         url = f"https://openlibrary.org/api/books?bibkeys=ISBN:{isbn}&jscmd=data&format=json"
         response = requests.get(url, timeout=2)  # Reduced from 5 to 2 seconds
         response.raise_for_status()
-        
+
         data = response.json()
+        synopsis = None
+        genre = None
         for key, book_data in data.items():
             if "description" in book_data:
                 desc = book_data["description"]
                 # Handle both string and dict descriptions
                 if isinstance(desc, dict) and "value" in desc:
-                    return desc["value"]
-                return str(desc) if desc else None
-        
-        return None
+                    synopsis = desc["value"]
+                else:
+                    synopsis = str(desc) if desc else None
+            subjects = book_data.get("subjects")
+            if subjects:
+                genre = subjects[0].get("name") if isinstance(subjects[0], dict) else str(subjects[0])
+
+        return synopsis, genre
     except Exception as e:
         print(f"Synopsis fetch failed for {title}: {e}")
-        return None
+        return None, None
 
 def load_books(csv_file):
     """Load and validate books from CSV. Raises ValueError on validation failure."""
@@ -197,12 +203,15 @@ def analyze_book(job_id, index):
                 print(f"ISBN lookup failed for '{title}': {error_type} - {e}")
                 return
 
-        # Fetch synopsis in the background so it never slows down library search
+        # Fetch synopsis/genre in the background so it never slows down library search
         if isbn:
-            threading.Thread(
-                target=lambda: book.update(synopsis=fetch_synopsis(isbn, title, author)),
-                daemon=True,
-            ).start()
+            def apply_metadata(book=book, isbn=isbn, title=title, author=author):
+                synopsis, genre = fetch_synopsis(isbn, title, author)
+                book["synopsis"] = synopsis
+                if not book.get("genre") and genre:  # Keep CSV genre if present
+                    book["genre"] = genre
+
+            threading.Thread(target=apply_metadata, daemon=True).start()
 
         book["message"] = "Checking libraries…"
 
