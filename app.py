@@ -169,7 +169,9 @@ def analyze_book(job_id, index):
 
         try:
             if isbn:
-                oakland = search(title, author)
+                # Check which libraries are selected
+                selected_libs = job.get("selected_libraries", ["oakland", "berkeley"])
+                oakland = search(title, author) if selected_libs else []
             else:
                 oakland = []
                 book["message"] = "ISBN not found; skipped library search."
@@ -180,8 +182,15 @@ def analyze_book(job_id, index):
             print(f"Oakland search failed for '{title}': {error_type} - {e}")
             return
 
-        book["oakland"] = oakland
-        print(f"Oakland: {oakland}")
+        # Filter results by selected libraries
+        selected_libs = job.get("selected_libraries", ["oakland", "berkeley"])
+        filtered_oakland = [
+            result for result in oakland
+            if (result.library or "").lower() in selected_libs
+        ]
+        
+        book["oakland"] = filtered_oakland
+        print(f"Oakland (filtered): {filtered_oakland}")
 
         book["state"] = "complete"
         book["message"] = "Complete"
@@ -232,11 +241,16 @@ def home():
         }), 400
 
     job_id = str(id(books))
+    
+    # Get selected libraries from request
+    selected_libraries = request.form.get("libraries", "oakland,berkeley").split(",")
+    selected_libraries = [lib.strip().lower() for lib in selected_libraries if lib.strip()]
 
     jobs[job_id] = {
         "books": books,
         "completed": 0,
         "created_at": time.time(),
+        "selected_libraries": selected_libraries,
         "lock": threading.Lock(),
     }
 

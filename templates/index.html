@@ -290,6 +290,20 @@
         required
     >
 
+    <div style="margin-top: 12px; padding: 10px; background: #f5f5f5; border-radius: 4px;">
+        <label style="font-weight: 500; display: block; margin-bottom: 8px;">Search libraries:</label>
+        <div style="display: flex; gap: 16px;">
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: normal;">
+                <input type="checkbox" id="lib-oakland" checked style="cursor: pointer;">
+                Oakland
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: normal;">
+                <input type="checkbox" id="lib-berkeley" checked style="cursor: pointer;">
+                Berkeley
+            </label>
+        </div>
+    </div>
+
 </form>
 
 <div id="status" class="status">
@@ -373,6 +387,12 @@ document
         const formData = new FormData();
 
         formData.append("books_file", file);
+        
+        // Add selected libraries
+        const selectedLibraries = [];
+        if (document.getElementById("lib-oakland").checked) selectedLibraries.push("oakland");
+        if (document.getElementById("lib-berkeley").checked) selectedLibraries.push("berkeley");
+        formData.append("libraries", selectedLibraries.join(","));
 
         try {
 
