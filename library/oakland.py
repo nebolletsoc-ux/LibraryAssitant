@@ -23,6 +23,9 @@ HOOPLA_SEARCH_URL = (
     "https://www.hoopladigital.com/search"
 )
 
+# Restrict subdomains to safe characters since they're interpolated into request URLs
+SUBDOMAIN_RE = re.compile(r"^[a-zA-Z0-9-]+$")
+
 STOPWORDS = {
     "a", "an", "and", "are", "as", "at", "be", "by",
     "for", "from", "in", "is", "it", "of", "on", "or",
@@ -957,6 +960,271 @@ def search_oakland(
         title,
         author,
     )
+
+
+# ----------------------------------------------------------------------
+# GENERIC CATALOG SEARCH (any Bibliocommons / OverDrive library)
+#
+# Oakland and Berkeley are themselves just presets of these generic
+# functions. Any library running the same catalog software works too.
+# ----------------------------------------------------------------------
+
+def search_bibliocommons(subdomain, library_key, title, author, timeout=15):
+    """Search a Bibliocommons-powered catalog (same platform as Oakland)."""
+    if not SUBDOMAIN_RE.match(subdomain or ""):
+        print(f"Bibliocommons ERROR: invalid subdomain '{subdomain}'")
+        return []
+
+    query = f"{title} {author}".strip()
+    catalog_url = f"https://{subdomain}.bibliocommons.com/v2/search"
+
+    try:
+        response = requests.get(
+            catalog_url,
+            params={"query": query, "searchType": "smart"},
+            headers=HEADERS,
+            timeout=timeout,
+        )
+        print(f"{library_key} catalog: {response.status_code} {len(response.text)} bytes")
+    except Exception as error:
+        print(f"{library_key} catalog ERROR: {error}")
+        return []
+
+    if response.status_code >= 400:
+        return []
+
+    results = _extract_oakland_hoopla(response.text, title, author)
+
+    # Retag results with the requested library key instead of "oakland"
+    return [
+        result(
+            library=library_key,
+            provider=r.provider,
+            format_name=r.format,
+            available=r.available,
+            wait=r.wait,
+            url=r.url,
+        )
+        for r in results
+    ]
+
+
+def search_overdrive_libby(subdomain, library_key, title, author, timeout=15):
+    """Search an OverDrive/Libby-powered catalog (same platform as Berkeley)."""
+    if not SUBDOMAIN_RE.match(subdomain or ""):
+        print(f"OverDrive ERROR: invalid subdomain '{subdomain}'")
+        return []
+
+    query = f"{title} {author}".strip()
+    base_url = f"https://{subdomain}.overdrive.com"
+    search_url = f"{base_url}/search"
+
+    try:
+        response = requests.get(
+            search_url,
+            params={"query": query},
+            headers=HEADERS,
+            timeout=timeout,
+        )
+        print(f"{library_key} Libby: {response.status_code} {len(response.text)} bytes")
+    except Exception as error:
+        print(f"{library_key} Libby ERROR: {error}")
+        return []
+
+    if response.status_code >= 400:
+        return []
+
+    html = response.text
+
+    title_collection = _extract_js_object(html, "titleCollection")
+    media_items = _extract_js_object(html, "mediaItems")
+
+    if isinstance(title_collection, list):
+        print(f"{library_key} Libby: titleCollection has {len(title_collection)} objects")
+
+    if isinstance(media_items, dict):
+        print(f"{library_key} Libby: mediaItems has {len(media_items)} objects")
+
+    candidates = []
+    if isinstance(title_collection, list):
+        candidates.extend(title_collection)
+    if isinstance(media_items, dict):
+        candidates.extend(media_items.values())
+
+    results = []
+    seen = set()
+
+    for item in candidates:
+        if not isinstance(item, dict):
+            continue
+
+        item_title = _libby_title(item)
+        item_author = _libby_author(item)
+
+        combined = f"{item_title} {item_author} {json.dumps(item)}"
+
+        if not title_matches(combined, title, author):
+            continue
+
+        if item_title and not title_matches(item_title, title, author):
+            continue
+
+        format_name = _libby_format(item)
+        url = _libby_url(item, base_url)
+
+        if not url:
+            continue
+
+        availability, wait = _detect_libby_availability(item, html)
+
+        key = (url, format_name)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        print(
+            f"{library_key} Libby MATCH:", item_title or title, "/", format_name, "/",
+            "AVAILABLE" if availability else wait or "STATUS UNKNOWN",
+        )
+
+        results.append(
+            result(
+                library=library_key,
+                provider="Libby",
+                format_name=format_name,
+                available=availability,
+                wait=wait,
+                url=url,
+            )
+        )
+
+    if not results:
+        print(f"{library_key} Libby: no specific match for {title}")
+
+    return results
+
+
+def search_hoopla(library_key, title, author, timeout=15):
+    """Search Hoopla's shared catalog (not tied to a specific library's domain)."""
+    query = f"{title} {author}".strip()
+
+    try:
+        response = requests.get(
+            HOOPLA_SEARCH_URL,
+            params={"q": query},
+            headers=HEADERS,
+            timeout=timeout,
+        )
+        print(f"Hoopla: {response.status_code} {len(response.text)} bytes")
+    except Exception as error:
+        print(f"Hoopla ERROR: {error}")
+        return []
+
+    if response.status_code >= 400:
+        return []
+
+    html = response.text
+    urls = _find_hoopla_candidates(html, title, author)
+
+    if not urls:
+        print("Hoopla: no title URLs found for", title)
+        return []
+
+    results = []
+    seen = set()
+
+    for url in urls:
+        position = html.lower().find(url.lower())
+        start = max(0, position - 3000)
+        end = min(len(html), position + 5000)
+        snippet = html[start:end]
+
+        format_name = detect_format(snippet)
+        wait = _extract_wait(snippet)
+        available = wait is None
+
+        key = (url, format_name)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        print("Hoopla MATCH:", title, "/", format_name, "/", "AVAILABLE" if available else wait)
+
+        results.append(
+            result(
+                library=library_key,
+                provider="Hoopla",
+                format_name=format_name,
+                available=available,
+                wait=wait,
+                url=url,
+            )
+        )
+
+    return results
+
+
+def search_libraries(title, author, library_configs, timeout=15):
+    """
+    Generic multi-library search entry point.
+
+    library_configs is a list of dicts, each shaped like:
+        {"key": "oakland", "bibliocommons": "oaklandlibrary", "hoopla": True}
+        {"key": "berkeley", "overdrive": "berkeleypubliclibrary"}
+        {"key": "redwood_city", "bibliocommons": "rcpl"}
+
+    Hoopla's catalog is shared/global, so it's only searched once
+    even if multiple configs request it.
+    """
+    if not title or not library_configs:
+        return []
+
+    all_results = []
+    hoopla_searched = False
+
+    for config in library_configs:
+        key = config.get("key") or "library"
+
+        if config.get("bibliocommons"):
+            try:
+                all_results.extend(
+                    search_bibliocommons(config["bibliocommons"], key, title, author, timeout=timeout)
+                )
+            except Exception as error:
+                print(f"{key} Bibliocommons ERROR: {error}")
+
+        if config.get("overdrive"):
+            try:
+                all_results.extend(
+                    search_overdrive_libby(config["overdrive"], key, title, author, timeout=timeout)
+                )
+            except Exception as error:
+                print(f"{key} OverDrive ERROR: {error}")
+
+        if config.get("hoopla") and not hoopla_searched:
+            try:
+                all_results.extend(search_hoopla(key, title, author, timeout=timeout))
+                hoopla_searched = True
+            except Exception as error:
+                print(f"Hoopla ERROR: {error}")
+
+    # Deduplicate final results
+    deduped = []
+    seen = set()
+
+    for item in all_results:
+        key = (
+            getattr(item, "library", None),
+            getattr(item, "provider", None),
+            getattr(item, "format", None),
+            getattr(item, "url", None),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+
+    return deduped
 
 
 # ----------------------------------------------------------------------
