@@ -24,8 +24,8 @@ jobs = {}
 # Known libraries the app ships with. Any Bibliocommons/OverDrive library
 # can be added by a user as a "custom" entry without needing new code here.
 LIBRARY_PRESETS = {
-    "oakland": {"key": "oakland", "label": "Oakland Public Library", "bibliocommons": "oaklandlibrary", "hoopla": True},
-    "berkeley": {"key": "berkeley", "label": "Berkeley Public Library", "overdrive": "berkeleypubliclibrary"},
+    "oakland": {"key": "oakland", "label": "Oakland Public Library", "bibliocommons": "oaklandlibrary"},
+    "berkeley": {"key": "berkeley", "label": "Berkeley Public Library", "overdrive": "berkeleypubliclibrary", "hoopla": True},
     "redwood_city": {"key": "redwood_city", "label": "Redwood City Public Library", "bibliocommons": "rcpl"},
 }
 
