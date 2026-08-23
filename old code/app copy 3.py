@@ -1,7 +1,6 @@
 import csv
 import io
 import json
-import os
 import threading
 import time
 import requests
@@ -14,38 +13,6 @@ from library.oakland import search_libraries
 
 
 app = Flask(__name__)
-
-# Optional shared-password gate. Off by default (no env var set = no prompt,
-# same as running locally today). Set APP_PASSWORD once this has a public
-# URL if you want to keep it to just the people you've shared it with —
-# anyone without the password gets a browser login prompt, any username works.
-APP_PASSWORD = os.environ.get("APP_PASSWORD")
-
-
-@app.before_request
-def require_password():
-    if not APP_PASSWORD:
-        return None
-
-    if request.path == "/healthz":
-        return None
-
-    auth = request.authorization
-    if not auth or auth.password != APP_PASSWORD:
-        return (
-            "Password required.",
-            401,
-            {"WWW-Authenticate": 'Basic realm="Library Assistant"'},
-        )
-
-    return None
-
-
-@app.route("/healthz")
-def healthz():
-    # Lightweight endpoint for hosting platforms to confirm the app is alive.
-    return jsonify({"status": "ok"})
-
 
 MAX_WORKERS = 8
 JOB_TIMEOUT_SECONDS = 3600  # Clean up jobs after 1 hour
@@ -256,8 +223,6 @@ def serialize_result(result):
         "available": getattr(result, "available", False),
         "wait": getattr(result, "wait", None),
         "url": getattr(result, "url", None),
-        "holds": getattr(result, "holds", None),
-        "waitWeeks": getattr(result, "wait_weeks", None),
     }
 
 
@@ -414,16 +379,6 @@ def home():
     if not library_configs:
         library_configs = [LIBRARY_PRESETS["oakland"], LIBRARY_PRESETS["berkeley"]]
 
-    # Opportunistically sweep expired jobs so memory doesn't grow unbounded
-    # on a long-running deployed process (a local dev server gets restarted
-    # often enough that this never mattered before).
-    now = time.time()
-    for old_job_id in [
-        jid for jid, j in jobs.items()
-        if now - j["created_at"] > JOB_TIMEOUT_SECONDS
-    ]:
-        del jobs[old_job_id]
-
     jobs[job_id] = {
         "books": books,
         "completed": 0,
@@ -494,18 +449,6 @@ def status():
 
 
 if __name__ == "__main__":
-    # PORT is set by hosting platforms (Render, Railway, etc.) at runtime;
-    # 5001 is the local fallback, chosen to avoid colliding with macOS's
-    # AirPlay Receiver, which uses 5000.
-    port = int(os.environ.get("PORT", 5001))
-
-    # debug=True must NEVER be on for anything reachable outside your own
-    # machine — Flask's debugger allows arbitrary code execution to anyone
-    # who can reach it. Set FLASK_DEBUG=1 locally if you want it back for
-    # development; it's off by default now so a deploy can't accidentally
-    # ship with it on.
-    debug = os.environ.get("FLASK_DEBUG") == "1"
-
-    # host="0.0.0.0" makes this reachable from other devices (e.g. your
-    # phone) on the same network, and is also what hosting platforms expect.
-    app.run(debug=debug, host="0.0.0.0", port=port)
+    # host="0.0.0.0" makes this reachable from other devices (e.g. your phone) on the same Wi-Fi
+    # port 5001 avoids colliding with macOS's AirPlay Receiver, which uses 5000
+    app.run(debug=True, host="0.0.0.0", port=5001)
