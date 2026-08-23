@@ -8,6 +8,4 @@ class LibraryResult:
     available: bool
     wait: str | None = None
     url: str | None = None
-    holds: int | None = None
-    wait_weeks: float | None = None
 

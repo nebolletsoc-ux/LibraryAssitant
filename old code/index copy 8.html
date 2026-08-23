@@ -292,27 +292,15 @@
 
         .modal-close:hover { background: #e6e9ee; }
 
-        .synopsis-header {
-            display: flex;
-            align-items: flex-start;
-            gap: 10px;
-            padding-right: 44px;
-        }
-
-        .synopsis-header .indicator {
-            margin-top: 10px;
-            flex: 0 0 auto;
-        }
-
         .synopsis-title {
-            margin: 0 0 6px 0;
+            margin: 0 44px 6px 0;
             font-size: 27px;
             line-height: 1.15;
             color: #152033;
         }
 
         .synopsis-author {
-            margin: 0 0 22px 24px;
+            margin: 0 0 22px;
             color: #6d7a8e;
             font-size: 18px;
         }
@@ -327,95 +315,6 @@
         .synopsis-loading {
             color: #7d8999;
             font-style: italic;
-        }
-
-        .borrow-section {
-            margin-top: 22px;
-            padding-top: 18px;
-            border-top: 1px solid #e4e8ed;
-        }
-
-        .borrow-section-label {
-            font-size: 13px;
-            font-weight: 700;
-            letter-spacing: 0.06em;
-            text-transform: uppercase;
-            color: #8793a6;
-            margin-bottom: 12px;
-        }
-
-        .borrow-option {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            margin-top: 12px;
-            padding: 12px 16px;
-            border-radius: 16px;
-            border: 1px solid #e4e8ed;
-            background: white;
-        }
-
-        .borrow-option:first-child { margin-top: 0; }
-
-        .borrow-option.available { background: #effcf3; border-color: #bdeecb; }
-        .borrow-option.waitlist { background: #fff7e9; border-color: #f6ddab; }
-        .borrow-option.unavailable { background: #f7f8fa; border-color: #e4e8ed; }
-
-        .borrow-icon-wrap {
-            width: 38px;
-            height: 38px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex: 0 0 auto;
-            background: white;
-        }
-
-        .borrow-icon-wrap svg { width: 20px; height: 20px; }
-
-        .borrow-option.available .borrow-icon-wrap { color: #08a74d; }
-        .borrow-option.waitlist .borrow-icon-wrap { color: #d98a10; }
-        .borrow-option.unavailable .borrow-icon-wrap { color: #aeb8c6; }
-
-        .borrow-info { flex: 1 1 auto; min-width: 0; }
-
-        .borrow-format {
-            display: block;
-            font-size: 17px;
-            font-weight: 700;
-            color: #152033;
-        }
-
-        .borrow-source {
-            display: block;
-            margin-top: 2px;
-            font-size: 14px;
-            color: #6d7a8e;
-        }
-
-        .borrow-wait-estimate {
-            color: #d98a10;
-            font-weight: 600;
-        }
-
-        .borrow-action {
-            flex: 0 0 auto;
-            padding: 9px 18px;
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: 600;
-            text-decoration: none;
-            white-space: nowrap;
-        }
-
-        .borrow-action.available { background: #18a957; color: white; }
-        .borrow-action.waitlist { background: #f3a329; color: white; }
-
-        .borrow-status-text {
-            flex: 0 0 auto;
-            font-size: 14px;
-            color: #9aa5b5;
         }
 
         .config-modal h2 {
@@ -640,26 +539,6 @@
                accept=".csv,text/csv">
     </div>
 
-    <button
-        type="button"
-        id="import-csv-button"
-        style="
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            z-index: 500;
-            padding: 10px 16px;
-            border: none;
-            border-radius: 20px;
-            background: #111b2c;
-            color: white;
-            cursor: pointer;
-            font-size: 13px;
-        "
-    >
-        Import CSV
-    </button>
-
     <div id="status">
         <strong>Status:</strong> Select your CSV file to begin.
     </div>
@@ -676,18 +555,9 @@
     <div class="modal">
         <button id="synopsis-close" class="modal-close" type="button"
                 aria-label="Close synopsis">&times;</button>
-
-        <div class="synopsis-header">
-            <span id="synopsis-dot" class="indicator"></span>
-            <h2 id="synopsis-title" class="synopsis-title"></h2>
-        </div>
+        <h2 id="synopsis-title" class="synopsis-title"></h2>
         <p id="synopsis-author" class="synopsis-author"></p>
         <p id="synopsis-body" class="synopsis-body"></p>
-
-        <div class="borrow-section">
-            <div class="borrow-section-label">Borrow options</div>
-            <div id="borrow-options"></div>
-        </div>
     </div>
 </div>
 
@@ -885,12 +755,6 @@ document.getElementById("custom-lib-add").addEventListener("click", function() {
 if (!loadLibraryConfig()) {
     openConfigModal();
 }
-
-document
-    .getElementById("import-csv-button")
-    .addEventListener("click", function() {
-        document.getElementById("books_file").click();
-    });
 
 document.getElementById("books_file").addEventListener("change", async function() {
     const file = this.files[0];
@@ -1148,27 +1012,15 @@ function renderBooks(books, isFiltering) {
 
 async function openSynopsisModal(book) {
     const overlay = document.getElementById("synopsis-overlay");
-    const dot = document.getElementById("synopsis-dot");
     const title = document.getElementById("synopsis-title");
     const author = document.getElementById("synopsis-author");
     const body = document.getElementById("synopsis-body");
-
-    const status = getBookStatus(book);
-
-    dot.className = "indicator " + (
-        book.state === "error" ? "error" :
-        book.state !== "complete" ? "checking" :
-        status === "available" ? "available" :
-        status === "waitlist" ? "waitlist" : "checking"
-    );
 
     title.textContent = book.title || "";
     author.textContent = book.author || "";
     body.className = "synopsis-body synopsis-loading";
     body.textContent = "Loading synopsis…";
     overlay.style.display = "flex";
-
-    renderBorrowOptions(book);
 
     try {
         let synopsis = book.synopsis || "";
@@ -1220,138 +1072,6 @@ async function openSynopsisModal(book) {
         body.textContent =
             "A synopsis could not be retrieved right now.";
     }
-}
-
-function renderBorrowOptions(book) {
-    const container = document.getElementById("borrow-options");
-    container.innerHTML = "";
-
-    const results = getResults(book);
-    const combos = {};
-
-    results.forEach(function(result) {
-        const format = result.format || "Digital";
-        const provider = result.provider || "Unknown";
-        const library = result.library || "Unknown";
-        const key = format + "|" + provider + "|" + library;
-
-        if (!combos[key] || (result.available && !combos[key].available)) {
-            combos[key] = {
-                format: format,
-                provider: provider,
-                library: library,
-                available: !!result.available,
-                wait: !!result.wait,
-                url: result.url,
-                holds: (typeof result.holds === "number") ? result.holds : null,
-                waitWeeks: (typeof result.waitWeeks === "number") ? result.waitWeeks : null
-            };
-        }
-    });
-
-    const comboList = Object.values(combos);
-
-    if (comboList.length === 0) {
-        const empty = document.createElement("p");
-        empty.className = "synopsis-body";
-        empty.style.color = "#9aa5b5";
-        empty.textContent = "No borrow options found yet.";
-        container.appendChild(empty);
-        return;
-    }
-
-    comboList.sort(function(a, b) {
-        function rank(c) {
-            if (c.available) return 0;
-            if (c.wait) return 1;
-            return 2;
-        }
-        return rank(a) - rank(b);
-    });
-
-    comboList.forEach(function(combo) {
-        const row = document.createElement("div");
-
-        let statusClass = "unavailable";
-        if (combo.available) {
-            statusClass = "available";
-        } else if (combo.wait) {
-            statusClass = "waitlist";
-        }
-
-        row.className = "borrow-option " + statusClass;
-
-        const iconWrap = document.createElement("div");
-        iconWrap.className = "borrow-icon-wrap";
-
-        const isAudio = combo.format.toLowerCase().includes("audio");
-
-        iconWrap.innerHTML = isAudio
-            ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13a8 8 0 0 1 16 0"/><path d="M4 13v5a2 2 0 0 0 2 2h1v-7H4z"/><path d="M20 13v5a2 2 0 0 1-2 2h-1v-7h3z"/></svg>`
-            : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5v-15z"/><path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20"/></svg>`;
-
-        const info = document.createElement("div");
-        info.className = "borrow-info";
-
-        const formatLabel = document.createElement("span");
-        formatLabel.className = "borrow-format";
-        formatLabel.textContent = combo.format;
-
-        const sourceLabel = document.createElement("span");
-        sourceLabel.className = "borrow-source";
-        sourceLabel.textContent = combo.provider + " · " + combo.library;
-
-        if (statusClass === "waitlist") {
-            const weeks = (combo.waitWeeks !== null)
-                ? combo.waitWeeks
-                : (combo.holds !== null ? Math.round(combo.holds * 1.5) : null);
-
-            if (weeks !== null) {
-                const waitSpan = document.createElement("span");
-                waitSpan.className = "borrow-wait-estimate";
-
-                let waitText = "";
-                if (combo.holds !== null) {
-                    waitText += " · " + combo.holds + (combo.holds === 1 ? " hold" : " holds");
-                }
-                waitText += " · ~" + weeks + (weeks === 1 ? " week" : " weeks");
-
-                waitSpan.textContent = waitText;
-                sourceLabel.appendChild(waitSpan);
-            }
-        }
-
-        info.appendChild(formatLabel);
-        info.appendChild(sourceLabel);
-
-        row.appendChild(iconWrap);
-        row.appendChild(info);
-
-        if (combo.available && combo.url) {
-            const action = document.createElement("a");
-            action.className = "borrow-action available";
-            action.href = combo.url;
-            action.target = "_blank";
-            action.rel = "noopener noreferrer";
-            action.textContent = "Borrow";
-            row.appendChild(action);
-        } else if (combo.wait && combo.url) {
-            const action = document.createElement("a");
-            action.className = "borrow-action waitlist";
-            action.href = combo.url;
-            action.target = "_blank";
-            action.rel = "noopener noreferrer";
-            action.textContent = "Join Waitlist";
-            row.appendChild(action);
-        } else {
-            const status = document.createElement("span");
-            status.className = "borrow-status-text";
-            status.textContent = "Unavailable";
-            row.appendChild(status);
-        }
-
-        container.appendChild(row);
-    });
 }
 
 function closeSynopsisModal() {
