@@ -1,0 +1,1566 @@
+<!doctype html>
+<html>
+<head>
+    <title>Library Assistant</title>
+
+    <style>
+        * {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background: #ffffff;
+    color: #142033;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                 Roboto, Helvetica, Arial, sans-serif;
+}
+
+#app {
+    width: 100%;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+/* =========================================================
+   HEADER
+   ========================================================= */
+
+.app-header {
+    padding: 30px 32px 16px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.app-title {
+    margin: 0;
+    font-size: 38px;
+    line-height: 1.05;
+    font-weight: 700;
+    letter-spacing: -1.2px;
+    color: #101b2d;
+}
+
+.app-subtitle {
+    margin-top: 10px;
+    font-size: 20px;
+    color: #8793a6;
+}
+
+.settings-button {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    padding: 0;
+    text-align: center;
+    color: #68758a;
+}
+
+.settings-icon {
+    width: 34px;
+    height: 34px;
+    display: block;
+    margin: 0 auto 3px auto;
+}
+
+.settings-label {
+    display: block;
+    font-size: 17px;
+    font-weight: 600;
+}
+
+/* =========================================================
+   SEARCH
+   ========================================================= */
+
+.search-container {
+    padding: 8px 32px 14px 32px;
+}
+
+.search-box {
+    height: 64px;
+    background: #f1f3f6;
+    border-radius: 32px;
+    display: flex;
+    align-items: center;
+    padding: 0 22px;
+}
+
+.search-icon {
+    width: 25px;
+    height: 25px;
+    flex: 0 0 auto;
+    color: #9aa5b5;
+}
+
+#book-search {
+    border: none;
+    outline: none;
+    background: transparent;
+    width: 100%;
+    margin-left: 15px;
+    font-size: 23px;
+    color: #263348;
+}
+
+#book-search::placeholder {
+    color: #9aa5b5;
+}
+
+/* =========================================================
+   FILTER BAR
+   ========================================================= */
+
+.filter-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 32px 20px 32px;
+    border-bottom: 1px solid #e4e8ed;
+}
+
+.filter-left {
+    display: flex;
+    gap: 8px;
+}
+
+.filter-pill {
+    height: 52px;
+    padding: 0 22px;
+    border-radius: 28px;
+    border: 1px solid #dce1e8;
+    background: white;
+    color: #69768a;
+    font-size: 21px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.filter-pill.active {
+    background: #111b2c;
+    border-color: #111b2c;
+    color: white;
+}
+
+.filter-pill-icon {
+    width: 22px;
+    height: 22px;
+}
+
+.available-pill {
+    height: 52px;
+    padding: 0 18px;
+    border-radius: 28px;
+    border: 1px solid #dce1e8;
+    background: white;
+    color: #69768a;
+    font-size: 21px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.available-pill.active {
+    background: #111b2c;
+    border-color: #111b2c;
+    color: white;
+}
+
+.available-circle {
+    width: 21px;
+    height: 21px;
+    border: 3px solid #aeb8c6;
+    border-radius: 50%;
+}
+
+.available-pill.active .available-circle {
+    border-color: #18a957;
+    background: #18a957;
+}
+
+.available-count {
+    background: #c9f6d8;
+    color: #159447;
+    min-width: 38px;
+    height: 34px;
+    padding: 0 9px;
+    border-radius: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+}
+
+/* =========================================================
+   OLD CONTROLS — HIDDEN
+   ========================================================= */
+
+#filter-controls {
+    display: none !important;
+}
+
+#progress-bar,
+.progress {
+    display: none;
+}
+
+#progress-text {
+    display: none;
+}
+
+#import-area {
+    display: none;
+}
+
+/* =========================================================
+   STATUS
+   ========================================================= */
+
+#status {
+    padding: 12px 32px;
+    font-size: 14px;
+    color: #7d8999;
+}
+
+#status strong {
+    font-weight: 600;
+}
+
+/* =========================================================
+   SUMMARY
+   ========================================================= */
+
+#summary {
+    display: none;
+}
+
+/* =========================================================
+   BOOK LIST
+   ========================================================= */
+
+#books-container {
+    width: 100%;
+}
+
+.book {
+    min-height: 114px;
+    padding: 22px 32px 20px 34px;
+
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    column-gap: 20px;
+    align-items: center;
+
+    border-bottom: 1px solid #e1e8e5;
+    border-left: 5px solid transparent;
+
+    background: white;
+}
+
+.book.has-availability {
+    background: #effcf3;
+    border-left-color: #42d77c;
+}
+
+.book.no-match {
+    background: white;
+    border-left-color: transparent;
+}
+
+.indicator {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    font-size: 0;
+}
+
+.indicator.available {
+    background: #18a957;
+}
+
+.indicator.waitlist {
+    background: #f3a329;
+}
+
+.indicator.checking {
+    background: #c8ced7;
+}
+
+.indicator.error {
+    background: #dc3545;
+}
+
+/* =========================================================
+   BOOK TEXT
+   ========================================================= */
+
+.book-info {
+    min-width: 0;
+}
+
+.book-title {
+    display: block;
+    font-size: 27px;
+    line-height: 1.15;
+    font-weight: 700;
+    color: #152033;
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.author {
+    display: block;
+    margin-top: 7px;
+    font-size: 23px;
+    line-height: 1.1;
+    color: #6d7a8e;
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* =========================================================
+   FORMAT ICONS
+   ========================================================= */
+
+.book-formats {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding-left: 12px;
+}
+
+.format-icon {
+    width: 27px;
+    height: 27px;
+    display: block;
+}
+
+.format-icon.available {
+    color: #08a74d;
+}
+
+.format-icon.waitlist {
+    color: #cbd2dc;
+}
+
+.format-icon.unavailable {
+    color: #d5dbe3;
+}
+
+/* =========================================================
+   AVAILABILITY DETAILS
+   ========================================================= */
+
+.book-availability {
+    display: none;
+}
+
+.availability-item {
+    display: none;
+}
+
+/* =========================================================
+   MODALS
+   ========================================================= */
+
+#synopsis-overlay,
+#config-overlay {
+    background: rgba(10, 20, 35, 0.45) !important;
+}
+
+#synopsis-overlay > div,
+#config-overlay > div {
+    border-radius: 18px !important;
+}
+
+/* =========================================================
+   IMPORT
+   ========================================================= */
+
+.csv-import {
+    position: absolute;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 600px) {
+
+    .app-header {
+        padding: 24px 20px 14px 20px;
+    }
+
+    .app-title {
+        font-size: 32px;
+    }
+
+    .app-subtitle {
+        font-size: 17px;
+    }
+
+    .settings-label {
+        font-size: 15px;
+    }
+
+    .search-container {
+        padding: 8px 20px 12px 20px;
+    }
+
+    .search-box {
+        height: 58px;
+    }
+
+    #book-search {
+        font-size: 19px;
+    }
+
+    .filter-bar {
+        padding: 0 20px 16px 20px;
+        overflow-x: auto;
+    }
+
+    .filter-pill {
+        height: 46px;
+        padding: 0 17px;
+        font-size: 18px;
+        white-space: nowrap;
+    }
+
+    .available-pill {
+        height: 46px;
+        font-size: 18px;
+        white-space: nowrap;
+    }
+
+    .book {
+        min-height: 104px;
+        padding: 19px 18px 18px 20px;
+        grid-template-columns: 14px minmax(0, 1fr) auto;
+        column-gap: 16px;
+    }
+
+    .book-title {
+        font-size: 21px;
+    }
+
+    .author {
+        font-size: 18px;
+        margin-top: 6px;
+    }
+
+    .book-formats {
+        gap: 9px;
+        padding-left: 5px;
+    }
+
+    .format-icon {
+        width: 23px;
+        height: 23px;
+    }
+}
+       
+    </style>
+</head>
+
+<body>
+
+<div id="app">
+
+    <!-- HEADER -->
+    <header class="app-header">
+
+        <div>
+            <h1 class="app-title">Library Assistant</h1>
+            <div class="app-subtitle">
+                <span id="book-count">0 books</span>
+                · StoryGraph
+            </div>
+        </div>
+
+        <button
+            id="config-gear"
+            class="settings-button"
+            title="Library settings"
+            type="button"
+        >
+            <svg
+                class="settings-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+            >
+                <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/>
+                <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-1.7 1.7-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V20h-2.4v-.2a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06-1.7-1.7.06-.06A1.7 1.7 0 0 0 8.46 15a1.7 1.7 0 0 0-1.56-1.03H6.7v-2.4h.2A1.7 1.7 0 0 0 8.46 10a1.7 1.7 0 0 0-.34-1.88l-.06-.06 1.7-1.7.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 12.73 5.2V5h2.4v.2a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 1.7 1.7-.06.06A1.7 1.7 0 0 0 19.4 10a1.7 1.7 0 0 0 1.56 1.03h.2v2.4h-.2A1.7 1.7 0 0 0 19.4 15z"/>
+            </svg>
+
+            <span class="settings-label">My Libraries</span>
+        </button>
+
+    </header>
+
+
+    <!-- SEARCH -->
+    <div class="search-container">
+
+        <div class="search-box">
+
+            <svg
+                class="search-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+            >
+                <circle cx="11" cy="11" r="7"/>
+                <path d="m20 20-4-4"/>
+            </svg>
+
+            <input
+                id="book-search"
+                type="search"
+                placeholder="Search books or authors..."
+                autocomplete="off"
+            >
+
+        </div>
+
+    </div>
+
+
+    <!-- FILTERS -->
+    <div class="filter-bar">
+
+        <div class="filter-left">
+
+            <button
+                class="filter-pill active"
+                data-format="all"
+                type="button"
+            >
+                All
+            </button>
+
+            <button
+                class="filter-pill"
+                data-format="ebook"
+                type="button"
+            >
+                <svg
+                    class="filter-pill-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                >
+                    <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5v-15z"/>
+                    <path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20"/>
+                </svg>
+                eBook
+            </button>
+
+            <button
+                class="filter-pill"
+                data-format="audiobook"
+                type="button"
+            >
+                <svg
+                    class="filter-pill-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                >
+                    <path d="M4 13a8 8 0 0 1 16 0"/>
+                    <path d="M4 13v5a2 2 0 0 0 2 2h1v-7H4z"/>
+                    <path d="M20 13v5a2 2 0 0 1-2 2h-1v-7h3z"/>
+                </svg>
+                Audio
+            </button>
+
+        </div>
+
+
+        <button
+            class="available-pill"
+            id="available-filter"
+            type="button"
+        >
+            <span class="available-circle"></span>
+            Available
+            <span
+                class="available-count"
+                id="available-count"
+            >0</span>
+        </button>
+
+    </div>
+
+
+    <!-- HIDDEN FILE IMPORT -->
+    <div class="csv-import">
+        <input
+            type="file"
+            id="books_file"
+            name="books_file"
+            accept=".csv,text/csv"
+        >
+    </div>
+
+
+    <div id="status">
+        <strong>Status:</strong>
+        Select your CSV file to begin.
+    </div>
+
+    <div class="progress">
+        <div id="progress-bar"></div>
+    </div>
+
+    <p id="progress-text"></p>
+
+    <!-- Existing filter controls remain in DOM because JS uses them -->
+    <div id="filter-controls" style="display:none;"></div>
+
+    <div id="summary"></div>
+
+    <div id="books-container"></div>
+
+    <button
+        type="button"
+        id="import-csv-button"
+        style="
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 500;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 20px;
+            background: #111b2c;
+            color: white;
+            cursor: pointer;
+            font-size: 13px;
+        "
+    >
+        Import CSV
+    </button>
+
+</div>
+
+<div id="synopsis-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; padding: 16px;">
+    <div style="background: white; border-radius: 8px; max-width: 500px; width: 100%; max-height: 80vh; overflow-y: auto; padding: 20px; position: relative;">
+        <button id="synopsis-close" style="position: absolute; top: 12px; right: 12px; background: none; border: none; font-size: 20px; cursor: pointer; color: #666; line-height: 1;">&times;</button>
+        <h2 id="synopsis-title" style="margin: 0 4px 4px 0; font-size: 18px; padding-right: 24px;"></h2>
+        <p id="synopsis-author" style="margin: 0 0 12px 0; color: #666; font-size: 14px;"></p>
+        <p id="synopsis-body" style="margin: 0; font-size: 14px; line-height: 1.6; color: #333; white-space: pre-wrap;"></p>
+    </div>
+</div>
+
+<div id="config-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; padding: 16px;">
+    <div style="background: white; border-radius: 8px; max-width: 420px; width: 100%; max-height: 85vh; overflow-y: auto; padding: 20px;">
+        <h2 style="margin: 0 0 4px 0; font-size: 18px;">Library settings</h2>
+        <p style="margin: 0 0 16px 0; color: #666; font-size: 13px;">
+            Choose which libraries to search. No login is required — we only check public catalog availability.
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: normal;">
+                <input type="checkbox" id="lib-oakland" checked style="cursor: pointer;">
+                Oakland Public Library
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: normal;">
+                <input type="checkbox" id="lib-berkeley" checked style="cursor: pointer;">
+                Berkeley Public Library
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: normal;">
+                <input type="checkbox" id="lib-redwood_city" style="cursor: pointer;">
+                Redwood City Public Library
+            </label>
+        </div>
+
+        <div id="custom-library-list" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;"></div>
+
+        <details style="margin-bottom: 16px;">
+            <summary style="cursor: pointer; font-size: 13px; color: #0366d6;">Add another library</summary>
+            <div style="margin-top: 10px; padding: 10px; background: #f5f5f5; border-radius: 4px; display: flex; flex-direction: column; gap: 8px;">
+                <p style="margin: 0; font-size: 12px; color: #666;">
+                    Works for any library on Bibliocommons or OverDrive/Libby. Find the subdomain in your library's catalog URL
+                    (e.g. "oaklandlibrary" from oaklandlibrary.bibliocommons.com).
+                </p>
+                <input id="custom-lib-name" type="text" placeholder="Library name" style="padding: 6px; font-size: 13px; border: 1px solid #ddd; border-radius: 4px;">
+                <input id="custom-lib-bibliocommons" type="text" placeholder="Bibliocommons subdomain (optional)" style="padding: 6px; font-size: 13px; border: 1px solid #ddd; border-radius: 4px;">
+                <input id="custom-lib-overdrive" type="text" placeholder="OverDrive/Libby subdomain (optional)" style="padding: 6px; font-size: 13px; border: 1px solid #ddd; border-radius: 4px;">
+                <button id="custom-lib-add" type="button" style="padding: 6px; background: #eef0f3; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; cursor: pointer;">Add library</button>
+            </div>
+        </details>
+
+        <button id="config-save" style="width: 100%; padding: 10px; background: #0366d6; color: white; border: none; border-radius: 4px; font-size: 14px; cursor: pointer;">Save & Continue</button>
+    </div>
+</div>
+
+
+<script>
+
+let jobId = null;
+let statusTimer = null;
+let allBooks = [];  // Store all books for filtering
+let currentFilters = {
+    format: "all",
+    availability: "all",
+    sort: "availability"
+};
+
+
+// Library configuration (persisted across visits)
+const LIBRARY_CONFIG_KEY = "libraryAssistant.libraries";
+const PRESET_LIBRARIES = ["oakland", "berkeley", "redwood_city"];
+
+function loadLibraryConfig() {
+    try {
+        const raw = localStorage.getItem(LIBRARY_CONFIG_KEY);
+        if (raw) {
+            return JSON.parse(raw);
+        }
+    } catch (e) {
+        // Fall through to default
+    }
+    return null;
+}
+
+function saveLibraryConfig(config) {
+    localStorage.setItem(LIBRARY_CONFIG_KEY, JSON.stringify(config));
+}
+
+function renderCustomLibraryList(customLibraries) {
+    const list = document.getElementById("custom-library-list");
+    list.innerHTML = "";
+
+    customLibraries.forEach(function(lib, index) {
+        const row = document.createElement("div");
+        row.style.cssText = "display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; background: #f5f5f5; border-radius: 4px; font-size: 13px;";
+
+        const label = document.createElement("span");
+        label.textContent = lib.name || lib.key;
+
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.textContent = "Remove";
+        removeBtn.style.cssText = "background: none; border: none; color: #dc3545; cursor: pointer; font-size: 12px;";
+        removeBtn.addEventListener("click", function() {
+            customLibraries.splice(index, 1);
+            renderCustomLibraryList(customLibraries);
+        });
+
+        row.appendChild(label);
+        row.appendChild(removeBtn);
+        list.appendChild(row);
+    });
+}
+
+let modalCustomLibraries = [];
+
+function openConfigModal() {
+    const config = loadLibraryConfig() || { oakland: true, berkeley: true, redwood_city: false, custom: [] };
+    document.getElementById("lib-oakland").checked = !!config.oakland;
+    document.getElementById("lib-berkeley").checked = !!config.berkeley;
+    document.getElementById("lib-redwood_city").checked = !!config.redwood_city;
+
+    modalCustomLibraries = (config.custom || []).slice();
+    renderCustomLibraryList(modalCustomLibraries);
+
+    document.getElementById("config-overlay").style.display = "flex";
+}
+
+function closeConfigModal() {
+    const config = {
+        oakland: document.getElementById("lib-oakland").checked,
+        berkeley: document.getElementById("lib-berkeley").checked,
+        redwood_city: document.getElementById("lib-redwood_city").checked,
+        custom: modalCustomLibraries
+    };
+    saveLibraryConfig(config);
+    document.getElementById("config-overlay").style.display = "none";
+}
+
+// Builds the JSON payload sent to the backend: presets by key, custom by full config
+function buildLibraryConfigPayload(config) {
+    const payload = [];
+    PRESET_LIBRARIES.forEach(function(key) {
+        if (config[key]) {
+            payload.push({ key: key });
+        }
+    });
+    (config.custom || []).forEach(function(lib) {
+        payload.push({
+            key: lib.key,
+            bibliocommons: lib.bibliocommons || null,
+            overdrive: lib.overdrive || null,
+            hoopla: false
+        });
+    });
+    return payload;
+}
+
+document.getElementById("config-gear").addEventListener("click", openConfigModal);
+document.getElementById("config-save").addEventListener("click", closeConfigModal);
+
+document.getElementById("custom-lib-add").addEventListener("click", function() {
+    const nameInput = document.getElementById("custom-lib-name");
+    const bibliocommonsInput = document.getElementById("custom-lib-bibliocommons");
+    const overdriveInput = document.getElementById("custom-lib-overdrive");
+
+    const name = nameInput.value.trim();
+    const bibliocommons = bibliocommonsInput.value.trim();
+    const overdrive = overdriveInput.value.trim();
+
+    if (!name || (!bibliocommons && !overdrive)) {
+        alert("Enter a library name and at least one subdomain.");
+        return;
+    }
+
+    modalCustomLibraries.push({
+        key: name.toLowerCase().replace(/[^a-z0-9]+/g, "_"),
+        name: name,
+        bibliocommons: bibliocommons || null,
+        overdrive: overdrive || null
+    });
+
+    renderCustomLibraryList(modalCustomLibraries);
+
+    nameInput.value = "";
+    bibliocommonsInput.value = "";
+    overdriveInput.value = "";
+});
+
+// First-time visitors see the config modal before they can upload a CSV
+if (!loadLibraryConfig()) {
+    openConfigModal();
+}
+
+
+// Auto-submit when file is selected
+document
+    .getElementById("books_file")
+    .addEventListener("change", async function(event) {
+
+        const file = this.files[0];
+
+        if (!file) {
+            return;
+        }
+
+        document.getElementById("status").innerHTML =
+            "<strong>Status:</strong> Uploading CSV…";
+
+        document.getElementById("summary").innerHTML = "";
+
+        document.getElementById("books-container").innerHTML = "";
+
+        document.getElementById("progress-bar").style.width = "0%";
+
+        document.getElementById("progress-text").textContent = "";
+
+        const formData = new FormData();
+
+        formData.append("books_file", file);
+        
+        // Add selected libraries from saved config
+        const libraryConfig = loadLibraryConfig() || { oakland: true, berkeley: true, custom: [] };
+        formData.append("libraries", JSON.stringify(buildLibraryConfigPayload(libraryConfig)));
+
+        try {
+
+            const response = await fetch("/", {
+                method: "POST",
+                body: formData
+            });
+
+            if (!response.ok) {
+                throw new Error(
+                    "Upload failed: " + response.status
+                );
+            }
+
+            const data = await response.json();
+
+            if (!data.job_id) {
+                throw new Error(
+                    "Server did not return a job ID."
+                );
+            }
+
+            jobId = data.job_id;
+
+            document.getElementById("status").innerHTML =
+                "<strong>Status:</strong> Analysis started. " +
+                data.total +
+                " books queued.";
+
+            startPolling();
+
+        } catch (error) {
+
+            document.getElementById("status").innerHTML =
+                "<strong>Status:</strong> Upload failed: " +
+                escapeHtml(error.message);
+        }
+    });
+
+
+// Filter pills exist in static HTML from page load, so wire them up now
+// rather than waiting on a render cycle (pollStatus always re-renders with
+// isFiltering=true to preserve allBooks, so this can't rely on renderBooks).
+setupFilterListeners();
+
+
+// Filter button event listeners
+function setupFilterListeners() {
+
+    if (document.body.dataset.filtersSetup === "true") {
+        return;
+    }
+
+    document.body.dataset.filtersSetup = "true";
+
+
+    /* Format buttons */
+
+    document
+        .querySelectorAll("[data-format]")
+        .forEach(function(button) {
+
+            button.addEventListener("click", function() {
+
+                document
+                    .querySelectorAll("[data-format]")
+                    .forEach(function(btn) {
+                        btn.classList.remove("active");
+                    });
+
+                this.classList.add("active");
+
+                currentFilters.format =
+                    this.dataset.format;
+
+                rerenderBooks();
+            });
+        });
+
+
+    /* Available button */
+
+    document
+        .getElementById("available-filter")
+        .addEventListener("click", function() {
+
+            const currentlyAvailable =
+                currentFilters.availability === "available";
+
+            currentFilters.availability =
+                currentlyAvailable ? "all" : "available";
+
+            this.classList.toggle(
+                "active",
+                !currentlyAvailable
+            );
+
+            rerenderBooks();
+        });
+
+
+    /* Search */
+
+    document
+        .getElementById("book-search")
+        .addEventListener("input", function() {
+
+            rerenderBooks();
+        });
+}
+
+function createFormatIcon(type, available, url) {
+
+    const wrapper = document.createElement("span");
+
+    wrapper.className =
+        "format-icon " +
+        (available ? "available" : "unavailable");
+
+
+    let svg = "";
+
+
+    if (type === "ebook") {
+
+        svg = `
+            <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+            >
+                <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5v-15z"/>
+                <path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20"/>
+            </svg>
+        `;
+
+    } else {
+
+        svg = `
+            <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+            >
+                <path d="M4 13a8 8 0 0 1 16 0"/>
+                <path d="M4 13v5a2 2 0 0 0 2 2h1v-7H4z"/>
+                <path d="M20 13v5a2 2 0 0 1-2 2h-1v-7h3z"/>
+            </svg>
+        `;
+    }
+
+
+    wrapper.innerHTML = svg;
+
+
+    if (url) {
+
+        const link = document.createElement("a");
+
+        link.href = url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+
+        link.style.color = "inherit";
+        link.style.textDecoration = "none";
+
+        link.appendChild(wrapper);
+
+        return link;
+    }
+
+
+    return wrapper;
+}
+
+function renderBooks(books, isFiltering) {
+
+    const container = document.getElementById("books-container");
+
+    if (!isFiltering) {
+        allBooks = books;
+
+        setupFilterListeners();
+    }
+
+    let filteredBooks = allBooks.slice();
+
+    /* ---------------------------------------------------------
+       SEARCH
+       --------------------------------------------------------- */
+
+    const searchInput = document.getElementById("book-search");
+    const searchText = (searchInput?.value || "").trim().toLowerCase();
+
+    if (searchText) {
+        filteredBooks = filteredBooks.filter(function(book) {
+
+            const title = (book.title || "").toLowerCase();
+            const author = (book.author || "").toLowerCase();
+
+            return (
+                title.includes(searchText) ||
+                author.includes(searchText)
+            );
+        });
+    }
+
+
+    /* ---------------------------------------------------------
+       FORMAT FILTER
+       --------------------------------------------------------- */
+
+    if (currentFilters.format !== "all") {
+
+        filteredBooks = filteredBooks.filter(function(book) {
+
+            const results = book.oakland || [];
+
+            return results.some(function(result) {
+
+                const format = (result.format || "").toLowerCase();
+
+                if (currentFilters.format === "audiobook") {
+                    return format.includes("audio");
+                }
+
+                if (currentFilters.format === "ebook") {
+                    return (
+                        format.includes("ebook") &&
+                        !format.includes("audio")
+                    );
+                }
+
+                return true;
+            });
+        });
+    }
+
+
+    /* ---------------------------------------------------------
+       AVAILABILITY FILTER
+       --------------------------------------------------------- */
+
+    if (currentFilters.availability === "available") {
+
+        filteredBooks = filteredBooks.filter(function(book) {
+
+            const results = book.oakland || [];
+
+            return results.some(function(result) {
+                return result.available === true;
+            });
+        });
+
+    } else if (currentFilters.availability === "waitlist") {
+
+        filteredBooks = filteredBooks.filter(function(book) {
+
+            const results = book.oakland || [];
+
+            return results.some(function(result) {
+                return result.available === false && result.wait;
+            });
+        });
+    }
+
+
+    /* ---------------------------------------------------------
+       SORT
+       --------------------------------------------------------- */
+
+    if (currentFilters.sort === "title") {
+
+        filteredBooks.sort(function(a, b) {
+            return (a.title || "").localeCompare(b.title || "");
+        });
+
+    } else if (currentFilters.sort === "author") {
+
+        filteredBooks.sort(function(a, b) {
+            return (a.author || "").localeCompare(b.author || "");
+        });
+
+    } else {
+
+        /*
+         * Available books first.
+         * Then waitlisted.
+         * Then no match.
+         */
+
+        filteredBooks.sort(function(a, b) {
+
+            function rank(book) {
+
+                const results = book.oakland || [];
+
+                if (results.some(r => r.available)) {
+                    return 0;
+                }
+
+                if (results.some(r => r.wait)) {
+                    return 1;
+                }
+
+                return 2;
+            }
+
+            return rank(a) - rank(b);
+        });
+    }
+
+
+    /* ---------------------------------------------------------
+       COUNTS
+       --------------------------------------------------------- */
+
+    let availableCount = 0;
+
+    allBooks.forEach(function(book) {
+
+        const results = book.oakland || [];
+
+        if (results.some(function(r) {
+            return r.available === true;
+        })) {
+            availableCount++;
+        }
+    });
+
+    document.getElementById("available-count").textContent =
+        availableCount;
+
+
+    document.getElementById("book-count").textContent =
+        allBooks.length + (allBooks.length === 1 ? " book" : " books");
+
+
+    /* ---------------------------------------------------------
+       RENDER
+       --------------------------------------------------------- */
+
+    container.innerHTML = "";
+
+
+    filteredBooks.forEach(function(book) {
+
+        const results = book.oakland || [];
+        const state = book.state || "unknown";
+
+        const hasAvailable = results.some(function(result) {
+            return result.available === true;
+        });
+
+        const hasWaitlist = results.some(function(result) {
+            return result.available === false && result.wait;
+        });
+
+
+        /* -----------------------------------------------
+           BOOK ROW
+           ----------------------------------------------- */
+
+        const row = document.createElement("div");
+
+        row.className = "book";
+
+        if (hasAvailable) {
+            row.classList.add("has-availability");
+        } else {
+            row.classList.add("no-match");
+        }
+
+
+        /* -----------------------------------------------
+           INDICATOR
+           ----------------------------------------------- */
+
+        const indicator = document.createElement("div");
+
+        indicator.className = "indicator";
+
+        if (state === "error") {
+
+            indicator.classList.add("error");
+
+        } else if (state !== "complete") {
+
+            indicator.classList.add("checking");
+
+        } else if (hasAvailable) {
+
+            indicator.classList.add("available");
+
+        } else if (hasWaitlist) {
+
+            indicator.classList.add("waitlist");
+
+        } else {
+
+            indicator.classList.add("checking");
+        }
+
+
+        /* -----------------------------------------------
+           INFO
+           ----------------------------------------------- */
+
+        const info = document.createElement("div");
+
+        info.className = "book-info";
+
+
+        const title = document.createElement("span");
+
+        title.className = "book-title";
+
+        title.textContent = book.title;
+
+
+        if (book.synopsis) {
+
+            title.style.cursor = "pointer";
+
+            title.addEventListener("click", function() {
+
+                openSynopsisModal(
+                    book.title,
+                    book.author,
+                    book.synopsis
+                );
+            });
+        }
+
+
+        const author = document.createElement("span");
+
+        author.className = "author";
+
+        author.textContent = book.author || "";
+
+
+        info.appendChild(title);
+        info.appendChild(author);
+
+
+        /* -----------------------------------------------
+           FORMAT ICONS
+           ----------------------------------------------- */
+
+        const formats = document.createElement("div");
+
+        formats.className = "book-formats";
+
+
+        const ebookResults = results.filter(function(result) {
+
+            const format = (result.format || "").toLowerCase();
+
+            return (
+                format.includes("ebook") &&
+                !format.includes("audio")
+            );
+        });
+
+
+        const audioResults = results.filter(function(result) {
+
+            const format = (result.format || "").toLowerCase();
+
+            return format.includes("audio");
+        });
+
+
+        /* -----------------------------------------------
+           EBOOK ICON
+           ----------------------------------------------- */
+
+        if (ebookResults.length > 0) {
+
+            const result = ebookResults.find(
+                r => r.available
+            ) || ebookResults[0];
+
+            const icon = createFormatIcon(
+                "ebook",
+                !!result.available,
+                result.url
+            );
+
+            formats.appendChild(icon);
+        }
+
+
+        /* -----------------------------------------------
+           AUDIO ICON
+           ----------------------------------------------- */
+
+        if (audioResults.length > 0) {
+
+            const result = audioResults.find(
+                r => r.available
+            ) || audioResults[0];
+
+            const icon = createFormatIcon(
+                "audio",
+                !!result.available,
+                result.url
+            );
+
+            formats.appendChild(icon);
+        }
+
+
+        /* -----------------------------------------------
+           ROW
+           ----------------------------------------------- */
+
+        row.appendChild(indicator);
+        row.appendChild(info);
+        row.appendChild(formats);
+
+        container.appendChild(row);
+    });
+}
+
+function rerenderBooks() {
+    renderBooks(allBooks, true);
+}
+
+document
+    .getElementById("import-csv-button")
+    .addEventListener("click", function() {
+
+        document
+            .getElementById("books_file")
+            .click();
+    });
+
+
+// Tags column may hold multiple comma-separated tags; use the first as the genre
+function getPrimaryGenre(genre) {
+    if (!genre) return null;
+    const first = genre.split(",")[0].trim();
+    return first || null;
+}
+
+
+function startPolling() {
+
+    if (statusTimer) {
+        clearInterval(statusTimer);
+    }
+
+    pollStatus();
+
+    statusTimer = setInterval(
+        pollStatus,
+        500
+    );
+}
+
+
+async function pollStatus() {
+
+    if (!jobId) {
+        return;
+    }
+
+    try {
+
+        const response = await fetch(
+            "/status?job_id=" +
+            encodeURIComponent(jobId)
+        );
+
+        if (!response.ok) {
+            throw new Error(
+                "Status request failed: " +
+                response.status
+            );
+        }
+
+        const data = await response.json();
+
+        const total = data.total;
+
+        const completed = data.completed;
+
+        const percent = total
+            ? Math.round(completed / total * 100)
+            : 0;
+
+        document.getElementById(
+            "progress-bar"
+        ).style.width = percent + "%";
+
+        document.getElementById(
+            "progress-text"
+        ).textContent =
+            completed +
+            " of " +
+            total +
+            " books analyzed";
+
+        if (data.finished) {
+
+            clearInterval(statusTimer);
+
+            document.getElementById(
+                "status"
+            ).innerHTML =
+                "<strong>Status:</strong> Analysis complete.";
+
+        } else {
+
+            document.getElementById(
+                "status"
+            ).innerHTML =
+                "<strong>Status:</strong> Analyzing books…";
+        }
+
+        allBooks = data.books;
+        renderBooks(allBooks, true);
+
+    } catch (error) {
+
+        console.error(
+            "Status error:",
+            error
+        );
+    }
+}
+
+
+function openSynopsisModal(title, author, synopsis) {
+    document.getElementById("synopsis-title").textContent = title;
+    document.getElementById("synopsis-author").textContent = author || "";
+    document.getElementById("synopsis-body").textContent = synopsis;
+    document.getElementById("synopsis-overlay").style.display = "flex";
+}
+
+function closeSynopsisModal() {
+    document.getElementById("synopsis-overlay").style.display = "none";
+}
+
+document.getElementById("synopsis-close").addEventListener("click", closeSynopsisModal);
+document.getElementById("synopsis-overlay").addEventListener("click", function(e) {
+    if (e.target === this) {
+        closeSynopsisModal();
+    }
+});
+
+
+function escapeHtml(value) {
+
+    if (
+        value === null ||
+        value === undefined
+    ) {
+        return "";
+    }
+
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+</script>
+
+</body>
+</html>

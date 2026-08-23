@@ -129,8 +129,6 @@ def result(
     available,
     wait,
     url,
-    holds=None,
-    wait_weeks=None,
 ):
     return LibraryResult(
         library=library,
@@ -139,8 +137,6 @@ def result(
         available=available,
         wait=wait,
         url=url,
-        holds=holds,
-        wait_weeks=wait_weeks,
     )
 
 
@@ -368,73 +364,15 @@ def _libby_url(item, base_url):
 def _extract_wait(text):
     """
     Attempt to identify a human-readable hold/wait indication.
-
-    Returns a tuple: (display_text, estimated_weeks). estimated_weeks is
-    None when no explicit duration was found in the text (e.g. a bare
-    "Join waitlist" link with no stated wait time).
     """
 
     lowered = text.lower()
 
     patterns = [
-        (r"(\d+)[\s-]*week[s]?\s*(?:wait|hold)", "week"),
-        (r"(\d+)[\s-]*week[s]?\s*(?:waitlist|waiting list)", "week"),
-        (r"(\d+)[\s-]*day[s]?\s*(?:wait|hold)", "day"),
-        (r"(\d+)[\s-]*month[s]?\s*(?:wait|hold)", "month"),
-    ]
-
-    for pattern, unit in patterns:
-
-        match = re.search(
-            pattern,
-            lowered
-        )
-
-        if match:
-            number = int(match.group(1))
-
-            if unit == "week":
-                return f"{number}-week wait", number
-
-            if unit == "day":
-                weeks = max(1, round(number / 7))
-                return f"{number}-day wait", weeks
-
-            if unit == "month":
-                weeks = round(number * 4.345)
-                return f"{number}-month wait", weeks
-
-    if (
-        "join waitlist" in lowered
-        or "join the waitlist" in lowered
-        or "place hold" in lowered
-        or "place a hold" in lowered
-        or "wait list" in lowered
-        or "waiting list" in lowered
-    ):
-        return "Waitlist", None
-
-    return None, None
-
-
-def _extract_holds(text):
-    """
-    Attempt to identify a hold/waitlist count from surrounding HTML text.
-
-    Handles common phrasings such as:
-        "12 people are waiting for 3 copies"
-        "12 patrons waiting"
-        "12 holds"
-        "Holds: 12"
-    """
-
-    lowered = text.lower()
-
-    patterns = [
-        r"(\d+)\s*(?:people|patrons?|users?|holds?)\s*(?:are\s*|is\s*)?waiting",
-        r"(\d+)\s*holds?\b",
-        r"holds?\s*[:\-]?\s*(\d+)",
-        r"(\d+)\s*(?:on\s*)?(?:the\s*)?wait\s*list",
+        r"(\d+)\s*week[s]?\s*(?:wait|hold)",
+        r"(\d+)\s*week[s]?\s*(?:waitlist|waiting list)",
+        r"(\d+)\s*day[s]?\s*(?:wait|hold)",
+        r"(\d+)\s*month[s]?\s*(?:wait|hold)",
     ]
 
     for pattern in patterns:
@@ -445,61 +383,26 @@ def _extract_holds(text):
         )
 
         if match:
-            try:
-                return int(match.group(1))
-            except (ValueError, IndexError):
-                continue
+            number = match.group(1)
 
-    return None
+            if "week" in pattern:
+                return f"{number}-week wait"
 
+            if "day" in pattern:
+                return f"{number}-day wait"
 
-def _extract_holds_from_item(item):
-    """
-    Look for a hold/waitlist count in common OverDrive/Libby JSON field
-    names. Field naming varies across OverDrive API versions, so we check
-    several plausible keys rather than assuming one.
-    """
+            if "month" in pattern:
+                return f"{number}-month wait"
 
-    if not isinstance(item, dict):
-        return None
-
-    for key in (
-        "holdsCount",
-        "holds_count",
-        "numberOfHolds",
-        "numHolds",
-        "waitlistSize",
-        "waitListSize",
-        "estimatedHolds",
+    if (
+        "join waitlist" in lowered
+        or "join the waitlist" in lowered
+        or "place hold" in lowered
+        or "place a hold" in lowered
+        or "wait list" in lowered
+        or "waiting list" in lowered
     ):
-        value = item.get(key)
-
-        if isinstance(value, (int, float)) and not isinstance(value, bool):
-            return int(value)
-
-    return None
-
-
-def _extract_wait_weeks_from_item(item):
-    """
-    Look for an explicit wait-time estimate in common OverDrive/Libby
-    JSON field names, converting days to weeks when that's the unit used.
-    """
-
-    if not isinstance(item, dict):
-        return None
-
-    for key in ("estimatedWaitDays", "estimated_wait_days"):
-        value = item.get(key)
-
-        if isinstance(value, (int, float)) and not isinstance(value, bool):
-            return max(1, round(value / 7))
-
-    for key in ("estimatedWaitWeeks", "estimated_wait_weeks"):
-        value = item.get(key)
-
-        if isinstance(value, (int, float)) and not isinstance(value, bool):
-            return round(value)
+        return "Waitlist"
 
     return None
 
@@ -511,17 +414,9 @@ def _detect_libby_availability(item, html):
     Important:
     existence of a Libby title does NOT mean it is
     immediately borrowable.
-
-    Returns a 4-tuple: (available, wait_text, holds, wait_weeks).
-    holds and wait_weeks are None when no such data could be found.
     """
 
     text = json.dumps(item).lower()
-
-    # Prefer structured JSON fields when OverDrive's response includes
-    # them; fall back to scraping the surrounding HTML text otherwise.
-    holds = _extract_holds_from_item(item)
-    wait_weeks = _extract_wait_weeks_from_item(item)
 
     # Explicit availability flags in OverDrive data.
     for key in (
@@ -533,22 +428,11 @@ def _detect_libby_availability(item, html):
 
         if isinstance(value, bool):
             if value:
-                return True, None, None, None
+                return True, None
 
-            wait_text, text_weeks = _extract_wait(text)
+            wait = _extract_wait(text)
 
-            if not wait_text:
-                wait_text, html_weeks = _extract_wait(html)
-                if text_weeks is None:
-                    text_weeks = html_weeks
-
-            if wait_weeks is None:
-                wait_weeks = text_weeks
-
-            if holds is None:
-                holds = _extract_holds(html)
-
-            return False, wait_text or "Waitlist", holds, wait_weeks
+            return False, wait or "Waitlist"
 
     # Search the item's serialized data for useful indicators.
     if any(
@@ -560,20 +444,14 @@ def _detect_libby_availability(item, html):
             '"isavailable":true',
         )
     ):
-        return True, None, None, None
+        return True, None
 
     # If the surrounding HTML clearly says there is a hold/wait,
     # do not call it available.
-    wait_text, text_weeks = _extract_wait(html)
+    wait = _extract_wait(html)
 
-    if wait_weeks is None:
-        wait_weeks = text_weeks
-
-    if holds is None:
-        holds = _extract_holds(html)
-
-    if wait_text:
-        return False, wait_text, holds, wait_weeks
+    if wait:
+        return False, wait
 
     lowered = html.lower()
 
@@ -583,10 +461,10 @@ def _detect_libby_availability(item, html):
         or "borrow now" in lowered
         or "available now" in lowered
     ):
-        return True, None, None, None
+        return True, None
 
     # We don't know.
-    return False, None, holds, wait_weeks
+    return False, None
 
 
 def search_berkeley_libby(
@@ -709,7 +587,7 @@ def search_berkeley_libby(
         if not url:
             continue
 
-        availability, wait, holds, wait_weeks = (
+        availability, wait = (
             _detect_libby_availability(
                 item,
                 html,
@@ -744,8 +622,6 @@ def search_berkeley_libby(
                 available=availability,
                 wait=wait,
                 url=url,
-                holds=holds,
-                wait_weeks=wait_weeks,
             )
         )
 
@@ -934,8 +810,7 @@ def search_berkeley_hoopla(
 
         # Hoopla normally permits immediate borrowing.
         # If the page explicitly says otherwise, preserve that.
-        wait, wait_weeks = _extract_wait(snippet)
-        holds = _extract_holds(snippet)
+        wait = _extract_wait(snippet)
 
         available = wait is None
 
@@ -967,8 +842,6 @@ def search_berkeley_hoopla(
                 available=available,
                 wait=wait,
                 url=url,
-                holds=holds,
-                wait_weeks=wait_weeks,
             )
         )
 
@@ -1131,8 +1004,6 @@ def search_bibliocommons(subdomain, library_key, title, author, timeout=15):
             available=r.available,
             wait=r.wait,
             url=r.url,
-            holds=r.holds,
-            wait_weeks=r.wait_weeks,
         )
         for r in results
     ]
@@ -1204,7 +1075,7 @@ def search_overdrive_libby(subdomain, library_key, title, author, timeout=15):
         if not url:
             continue
 
-        availability, wait, holds, wait_weeks = _detect_libby_availability(item, html)
+        availability, wait = _detect_libby_availability(item, html)
 
         key = (url, format_name)
         if key in seen:
@@ -1224,8 +1095,6 @@ def search_overdrive_libby(subdomain, library_key, title, author, timeout=15):
                 available=availability,
                 wait=wait,
                 url=url,
-                holds=holds,
-                wait_weeks=wait_weeks,
             )
         )
 
@@ -1271,8 +1140,7 @@ def search_hoopla(library_key, title, author, timeout=15):
         snippet = html[start:end]
 
         format_name = detect_format(snippet)
-        wait, wait_weeks = _extract_wait(snippet)
-        holds = _extract_holds(snippet)
+        wait = _extract_wait(snippet)
         available = wait is None
 
         key = (url, format_name)
@@ -1290,8 +1158,6 @@ def search_hoopla(library_key, title, author, timeout=15):
                 available=available,
                 wait=wait,
                 url=url,
-                holds=holds,
-                wait_weeks=wait_weeks,
             )
         )
 

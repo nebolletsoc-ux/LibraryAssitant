@@ -65,97 +65,35 @@ def categorize_error(error):
 
 
 def fetch_synopsis(isbn, title, author):
-    """
-    Fetch a synopsis and genre for a book from Open Library.
-
-    Important: Open Library's edition-level record (what /isbn/{isbn}.json
-    and the legacy /api/books?jscmd=data endpoint return) almost never
-    carries a "description" — that field lives on the separate parent
-    "work" record. So we look up the edition first (mainly to find its
-    work key, and to grab any edition-level subjects as a genre fallback),
-    then fetch the work record for the actual description/subjects.
-    """
+    """Fetch synopsis and genre (subjects) from Open Library API in one request."""
     if not isbn:
         return None, None
 
-    headers = {
-        # Open Library asks for a descriptive User-Agent; a generic/missing
-        # one risks being deprioritized or blocked under load.
-        "User-Agent": "LibraryAssistant/1.0 (personal reading-list tool)"
-    }
-
-    synopsis = None
-    genre = None
-    work_key = None
-
-    # Step 1: edition lookup — gives us the work key, and sometimes subjects.
     try:
-        edition_url = f"https://openlibrary.org/isbn/{isbn}.json"
-        response = requests.get(edition_url, headers=headers, timeout=4)
+        # Try by ISBN first (with short timeout for network-restricted environments)
+        url = f"https://openlibrary.org/api/books?bibkeys=ISBN:{isbn}&jscmd=data&format=json"
+        response = requests.get(url, timeout=2)  # Reduced from 5 to 2 seconds
+        response.raise_for_status()
 
-        if response.status_code == 200:
-            edition_data = response.json()
-
-            works = edition_data.get("works") or []
-            if works and isinstance(works[0], dict):
-                work_key = works[0].get("key")
-
-            subjects = edition_data.get("subjects")
+        data = response.json()
+        synopsis = None
+        genre = None
+        for key, book_data in data.items():
+            if "description" in book_data:
+                desc = book_data["description"]
+                # Handle both string and dict descriptions
+                if isinstance(desc, dict) and "value" in desc:
+                    synopsis = desc["value"]
+                else:
+                    synopsis = str(desc) if desc else None
+            subjects = book_data.get("subjects")
             if subjects:
-                genre = subjects[0] if isinstance(subjects[0], str) else str(subjects[0])
+                genre = subjects[0].get("name") if isinstance(subjects[0], dict) else str(subjects[0])
 
+        return synopsis, genre
     except Exception as e:
-        print(f"Edition lookup failed for '{title}' ({isbn}): {e}")
-
-    # Step 2: work lookup — this is where the description usually lives.
-    if work_key:
-        try:
-            work_url = f"https://openlibrary.org{work_key}.json"
-            response = requests.get(work_url, headers=headers, timeout=4)
-            response.raise_for_status()
-
-            work_data = response.json()
-
-            desc = work_data.get("description")
-            if isinstance(desc, dict) and "value" in desc:
-                synopsis = desc["value"]
-            elif isinstance(desc, str):
-                synopsis = desc
-
-            if not genre:
-                subjects = work_data.get("subjects")
-                if subjects:
-                    genre = subjects[0] if isinstance(subjects[0], str) else str(subjects[0])
-
-        except Exception as e:
-            print(f"Work lookup failed for '{title}' ({work_key}): {e}")
-
-    # Fallback: the legacy bibkeys endpoint occasionally carries a
-    # description directly on the edition even when the above doesn't.
-    if not synopsis:
-        try:
-            url = f"https://openlibrary.org/api/books?bibkeys=ISBN:{isbn}&jscmd=data&format=json"
-            response = requests.get(url, headers=headers, timeout=4)
-            response.raise_for_status()
-
-            data = response.json()
-            for key, book_data in data.items():
-                if "description" in book_data:
-                    desc = book_data["description"]
-                    if isinstance(desc, dict) and "value" in desc:
-                        synopsis = desc["value"]
-                    else:
-                        synopsis = str(desc) if desc else None
-
-                if not genre:
-                    subjects = book_data.get("subjects")
-                    if subjects:
-                        genre = subjects[0].get("name") if isinstance(subjects[0], dict) else str(subjects[0])
-
-        except Exception as e:
-            print(f"Bibkeys fallback failed for '{title}': {e}")
-
-    return synopsis, genre
+        print(f"Synopsis fetch failed for {title}: {e}")
+        return None, None
 
 def load_books(csv_file):
     """Load and validate books from CSV. Raises ValueError on validation failure."""
@@ -223,6 +161,8 @@ def serialize_result(result):
         "available": getattr(result, "available", False),
         "wait": getattr(result, "wait", None),
         "url": getattr(result, "url", None),
+        "holds": getattr(result, "holds", None),
+        "waitWeeks": getattr(result, "wait_weeks", None),
     }
 
 
