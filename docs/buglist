@@ -1,0 +1,14 @@
+start-up page show instructions, something like:
+ (1) select your libraries with the Gear icon
+ (2) download your reading list from GoodReads (link) or SotryGraph (link)
+ (3) click "Upload Reading List" to see what's available
+Change "Import CSV" to "Upload your reading list"
+test with goodreads - FIXED
+search library instead of having to enter url (see Libby screenshot "~/LibraryAssistant/docs/Add Library screen.png")
+Have app have no libraries selected by default
+Make possible to pick Hoopla library if this is necesssary- if all libraries have the same hoopla selection then just use whichever is easier and if so, remove Hoopla library name from popup window that shows synopsis and availability
+have the app remember which libraries a user has selected from session to session
+gear icon messed up
+available logic not correct: Available AND eBook should show available ebooks (now shows ebooks that are available as audiobooks) - FIXED
+make icon for browser tab and app
+clicking title to get synopsis only works if I click on the left hand side of a title
