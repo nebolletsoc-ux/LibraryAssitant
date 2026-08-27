@@ -713,10 +713,6 @@
                 <input type="checkbox" id="lib-redwood_city">
                 Redwood City Public Library
             </label>
-            <label class="library-option">
-                <input type="checkbox" id="lib-hoopla" checked>
-                Hoopla
-            </label>
         </div>
 
         <div id="custom-library-list" class="custom-library-list"></div>
@@ -757,7 +753,7 @@ let currentFilters = {
 };
 
 const LIBRARY_CONFIG_KEY = "libraryAssistant.libraries";
-const PRESET_LIBRARIES = ["oakland", "berkeley", "redwood_city", "hoopla"];
+const PRESET_LIBRARIES = ["oakland", "berkeley", "redwood_city"];
 
 function loadLibraryConfig() {
     try {
@@ -800,27 +796,17 @@ function renderCustomLibraryList(customLibraries) {
     });
 }
 
-function defaultLibraryConfig() {
-    return {
+function openConfigModal() {
+    const config = loadLibraryConfig() || {
         oakland: true,
         berkeley: true,
         redwood_city: false,
-        hoopla: true,
         custom: []
     };
-}
 
-function applyLibraryConfigToCheckboxes(config) {
     document.getElementById("lib-oakland").checked = !!config.oakland;
     document.getElementById("lib-berkeley").checked = !!config.berkeley;
     document.getElementById("lib-redwood_city").checked = !!config.redwood_city;
-    document.getElementById("lib-hoopla").checked = !!config.hoopla;
-}
-
-function openConfigModal() {
-    const config = loadLibraryConfig() || defaultLibraryConfig();
-
-    applyLibraryConfigToCheckboxes(config);
 
     modalCustomLibraries = (config.custom || []).slice();
     renderCustomLibraryList(modalCustomLibraries);
@@ -834,7 +820,6 @@ function closeConfigModal(save = true) {
             oakland: document.getElementById("lib-oakland").checked,
             berkeley: document.getElementById("lib-berkeley").checked,
             redwood_city: document.getElementById("lib-redwood_city").checked,
-            hoopla: document.getElementById("lib-hoopla").checked,
             custom: modalCustomLibraries
         });
     }
@@ -920,7 +905,11 @@ document.getElementById("books_file").addEventListener("change", async function(
     const formData = new FormData();
     formData.append("books_file", file);
 
-    const libraryConfig = loadLibraryConfig() || defaultLibraryConfig();
+    const libraryConfig = loadLibraryConfig() || {
+        oakland: true,
+        berkeley: true,
+        custom: []
+    };
     formData.append(
         "libraries",
         JSON.stringify(buildLibraryConfigPayload(libraryConfig))
@@ -1056,29 +1045,23 @@ function renderBooks(books, isFiltering) {
         });
     }
 
-    function resultMatchesFormat(result) {
-        const format = (result.format || "").toLowerCase();
-
-        if (currentFilters.format === "audiobook") {
-            return format.includes("audio");
-        }
-
-        if (currentFilters.format === "ebook") {
-            return format.includes("ebook") && !format.includes("audio");
-        }
-
-        return true; // "all"
-    }
-
     if (currentFilters.format !== "all") {
         filteredBooks = filteredBooks.filter(function(book) {
-            return getResults(book).some(resultMatchesFormat);
+            return getResults(book).some(function(result) {
+                const format = (result.format || "").toLowerCase();
+
+                if (currentFilters.format === "audiobook") {
+                    return format.includes("audio");
+                }
+
+                return format.includes("ebook") && !format.includes("audio");
+            });
         });
     }
 
     if (currentFilters.availability === "available") {
         filteredBooks = filteredBooks.filter(function(book) {
-            return getResults(book).filter(resultMatchesFormat).some(r => r.available === true);
+            return getResults(book).some(r => r.available === true);
         });
     }
 
@@ -1089,7 +1072,7 @@ function renderBooks(books, isFiltering) {
 
     let availableCount = 0;
     allBooks.forEach(function(book) {
-        if (getResults(book).filter(resultMatchesFormat).some(r => r.available === true)) {
+        if (getResults(book).some(r => r.available === true)) {
             availableCount++;
         }
     });

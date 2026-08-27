@@ -72,20 +72,14 @@ def validate_csv_structure(fieldnames):
     """Validate CSV has required columns. Returns (is_valid, error_message)."""
     if not fieldnames:
         return False, "CSV file is empty or cannot be read."
-
-    fieldset = set(fieldnames)
-
-    storygraph_required = {"Title", "Authors", "Read Status"}
-    goodreads_required = {"Title", "Author", "Exclusive Shelf"}
-
-    if storygraph_required <= fieldset or goodreads_required <= fieldset:
-        return True, None
-
-    return False, (
-        "Unrecognized CSV format. Expected a StoryGraph export "
-        f"(columns: {', '.join(sorted(storygraph_required))}) or a "
-        f"Goodreads export (columns: {', '.join(sorted(goodreads_required))})."
-    )
+    
+    required = {"Title", "Authors", "Read Status"}
+    missing = required - set(fieldnames)
+    
+    if missing:
+        return False, f"Missing required columns: {', '.join(sorted(missing))}. Expected: {', '.join(sorted(required))}"
+    
+    return True, None
 
 
 def categorize_error(error):
@@ -201,15 +195,6 @@ def fetch_synopsis(isbn, title, author):
 
     return synopsis, genre
 
-def _clean_goodreads_isbn(value):
-    """Goodreads wraps ISBN cells like ="9780262384254" to stop spreadsheet
-    apps from mangling leading zeros/formatting. Strip that wrapper."""
-    value = (value or "").strip()
-    if value.startswith('="') and value.endswith('"'):
-        value = value[2:-1]
-    return value.strip()
-
-
 def load_books(csv_file):
     """Load and validate books from CSV. Raises ValueError on validation failure."""
     try:
@@ -227,33 +212,19 @@ def load_books(csv_file):
     if not is_valid:
         raise ValueError(error_msg)
 
-    fieldset = set(reader.fieldnames)
-    is_goodreads = "Exclusive Shelf" in fieldset and "Read Status" not in fieldset
-
     print("CSV columns:", reader.fieldnames)
-    print("Detected format:", "Goodreads" if is_goodreads else "StoryGraph")
 
     books = []
 
     try:
         for row_num, row in enumerate(reader, start=2):  # start=2 accounts for header
             title = (row.get("Title") or "").strip()
+            author = (row.get("Authors") or "").strip()
+            read_status = (row.get("Read Status") or "").strip().lower()
+            csv_isbn = (row.get("ISBN/UID") or "").strip()  # Extract ISBN from CSV if available
+            genre = (row.get("Tags") or "").strip()  # StoryGraph has no dedicated genre column; Tags is closest
 
-            if is_goodreads:
-                author = (row.get("Author") or "").strip()
-                read_status = (row.get("Exclusive Shelf") or "").strip().lower()
-                isbn = (
-                    _clean_goodreads_isbn(row.get("ISBN13"))
-                    or _clean_goodreads_isbn(row.get("ISBN"))
-                )
-                genre = None  # Goodreads has no dedicated genre column
-            else:
-                author = (row.get("Authors") or "").strip()
-                read_status = (row.get("Read Status") or "").strip().lower()
-                isbn = (row.get("ISBN/UID") or "").strip()  # Extract ISBN from CSV if available
-                genre = (row.get("Tags") or "").strip()  # StoryGraph has no dedicated genre column; Tags is closest
-
-            # Only analyze books marked "to-read"
+            # Only analyze StoryGraph books marked "to-read"
             if read_status != "to-read":
                 continue
 
@@ -264,7 +235,7 @@ def load_books(csv_file):
             books.append({
                 "title": title,
                 "author": author,
-                "isbn": isbn or None,  # Use ISBN from CSV; will look up if empty
+                "isbn": csv_isbn or None,  # Use ISBN from CSV; will look up if empty
                 "synopsis": None,  # Will be fetched during analysis
                 "genre": genre or None,
                 "oakland": [],
