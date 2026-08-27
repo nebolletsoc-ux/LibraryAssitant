@@ -357,11 +357,7 @@ def analyze_book(job_id, index):
 
         try:
             if isbn:
-                # By this point the upload route has already rejected any
-                # request with zero libraries selected, so this should
-                # always be populated — job.get(...) here is just a
-                # defensive fallback, not a real default library choice.
-                library_configs = job.get("library_configs") or []
+                library_configs = job.get("library_configs") or [LIBRARY_PRESETS["oakland"], LIBRARY_PRESETS["berkeley"], LIBRARY_PRESETS["hoopla"]]
                 results = search_libraries(title, author, library_configs)
             else:
                 results = []
@@ -450,9 +446,7 @@ def home():
             })
 
     if not library_configs:
-        return jsonify({
-            "error": "No libraries selected. Click the gear icon and choose at least one library."
-        }), 400
+        library_configs = [LIBRARY_PRESETS["oakland"], LIBRARY_PRESETS["berkeley"], LIBRARY_PRESETS["hoopla"]]
 
     # Opportunistically sweep expired jobs so memory doesn't grow unbounded
     # on a long-running deployed process (a local dev server gets restarted
