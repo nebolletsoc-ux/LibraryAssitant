@@ -1,13 +1,7 @@
 <!doctype html>
 <html>
 <head>
-    <meta charset="utf-8">
     <title>Library Assistant</title>
-    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="manifest" href="/static/manifest.json">
-    <meta name="theme-color" content="#101b2d">
 
     <style>
         * { box-sizing: border-box; }
@@ -47,30 +41,6 @@
             margin-top: 10px;
             font-size: 20px;
             color: #8793a6;
-        }
-
-        .intro-instructions {
-            margin: 0 32px 20px;
-            padding: 16px 20px;
-            background: #f6f8fa;
-            border-radius: 14px;
-            color: #4c5566;
-            font-size: 15px;
-            line-height: 1.5;
-        }
-
-        .intro-instructions ol {
-            margin: 0;
-            padding-left: 20px;
-        }
-
-        .intro-instructions li {
-            margin: 4px 0;
-        }
-
-        .intro-instructions a {
-            color: #2b5fd9;
-            text-decoration: underline;
         }
 
         .settings-button {
@@ -622,18 +592,6 @@
         </button>
     </header>
 
-    <div class="intro-instructions">
-        <ol>
-            <li>Select your libraries with the <strong>gear icon</strong> above.</li>
-            <li>Download your reading list from
-                <a href="https://www.goodreads.com/review/import" target="_blank" rel="noopener noreferrer">Goodreads</a>
-                or
-                <a href="https://app.thestorygraph.com/" target="_blank" rel="noopener noreferrer">StoryGraph</a>.
-            </li>
-            <li>Click <strong>"Upload your reading list"</strong> below to see what's available.</li>
-        </ol>
-    </div>
-
     <div class="search-container">
         <div class="search-box">
             <svg class="search-icon" viewBox="0 0 24 24" fill="none"
@@ -699,7 +657,7 @@
             font-size: 13px;
         "
     >
-        Upload your reading list
+        Import CSV
     </button>
 
     <div id="status">
@@ -744,11 +702,11 @@
 
         <div class="library-options">
             <label class="library-option">
-                <input type="checkbox" id="lib-oakland">
+                <input type="checkbox" id="lib-oakland" checked>
                 Oakland Public Library
             </label>
             <label class="library-option">
-                <input type="checkbox" id="lib-berkeley">
+                <input type="checkbox" id="lib-berkeley" checked>
                 Berkeley Public Library
             </label>
             <label class="library-option">
@@ -756,7 +714,7 @@
                 Redwood City Public Library
             </label>
             <label class="library-option">
-                <input type="checkbox" id="lib-hoopla">
+                <input type="checkbox" id="lib-hoopla" checked>
                 Hoopla
             </label>
         </div>
@@ -844,10 +802,10 @@ function renderCustomLibraryList(customLibraries) {
 
 function defaultLibraryConfig() {
     return {
-        oakland: false,
-        berkeley: false,
+        oakland: true,
+        berkeley: true,
         redwood_city: false,
-        hoopla: false,
+        hoopla: true,
         custom: []
     };
 }
@@ -872,24 +830,13 @@ function openConfigModal() {
 
 function closeConfigModal(save = true) {
     if (save) {
-        const config = {
+        saveLibraryConfig({
             oakland: document.getElementById("lib-oakland").checked,
             berkeley: document.getElementById("lib-berkeley").checked,
             redwood_city: document.getElementById("lib-redwood_city").checked,
             hoopla: document.getElementById("lib-hoopla").checked,
             custom: modalCustomLibraries
-        };
-
-        const hasAnySelected =
-            config.oakland || config.berkeley || config.redwood_city ||
-            config.hoopla || config.custom.length > 0;
-
-        if (!hasAnySelected) {
-            alert("Select at least one library before saving.");
-            return;
-        }
-
-        saveLibraryConfig(config);
+        });
     }
 
     document.getElementById("config-overlay").style.display = "none";
@@ -1070,9 +1017,6 @@ function createFormatIcon(type, result) {
         link.rel = "noopener noreferrer";
         link.style.color = "inherit";
         link.style.textDecoration = "none";
-        link.addEventListener("click", function(e) {
-            e.stopPropagation();
-        });
         link.appendChild(wrapper);
         return link;
     }
@@ -1162,11 +1106,6 @@ function renderBooks(books, isFiltering) {
 
         const row = document.createElement("div");
         row.className = "book";
-        row.style.cursor = "pointer";
-        row.title = "Click for synopsis and availability";
-        row.addEventListener("click", function() {
-            openSynopsisModal(book);
-        });
         if (status === "available") row.classList.add("has-availability");
 
         const indicator = document.createElement("div");
@@ -1183,6 +1122,10 @@ function renderBooks(books, isFiltering) {
         const title = document.createElement("span");
         title.className = "book-title";
         title.textContent = book.title;
+        title.title = "Click to read synopsis";
+        title.addEventListener("click", function() {
+            openSynopsisModal(book);
+        });
 
         const author = document.createElement("span");
         author.className = "author";
@@ -1373,9 +1316,7 @@ function renderBorrowOptions(book) {
 
         const sourceLabel = document.createElement("span");
         sourceLabel.className = "borrow-source";
-        sourceLabel.textContent = (combo.library || "").toLowerCase() === "hoopla"
-            ? combo.provider
-            : combo.provider + " · " + combo.library;
+        sourceLabel.textContent = combo.provider + " · " + combo.library;
 
         if (statusClass === "waitlist") {
             const weeks = (combo.waitWeeks !== null)
