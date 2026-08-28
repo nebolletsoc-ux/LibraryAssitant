@@ -1,14 +1,79 @@
-start-up page show instructions, something like:
- (1) select your libraries with the Gear icon
- (2) download your reading list from GoodReads (link) or SotryGraph (link)
- (3) click "Upload Reading List" to see what's available
-Change "Import CSV" to "Upload your reading list"
-test with goodreads - FIXED
-search library instead of having to enter url (see Libby screenshot "~/LibraryAssistant/docs/Add Library screen.png")
-Have app have no libraries selected by default
-Make possible to pick Hoopla library if this is necesssary- if all libraries have the same hoopla selection then just use whichever is easier and if so, remove Hoopla library name from popup window that shows synopsis and availability
-have the app remember which libraries a user has selected from session to session
-gear icon messed up
-available logic not correct: Available AND eBook should show available ebooks (now shows ebooks that are available as audiobooks) - FIXED
-make icon for browser tab and app
-clicking title to get synopsis only works if I click on the left hand side of a title
+Library Assistant — Bug/Feature List (revised)
+
+1. start-up page show instructions with 3-step guide
+   FIXED — added instructions box below header with the exact steps
+   requested (gear icon -> download from Goodreads/StoryGraph -> upload),
+   with real links to each site's export page.
+   NOT FIXED - give specific instructions on how to download reading list such as 
+   (for SToryGraph) "Click on hamburger > Manage Account > Export StoryGraph Library"
+
+2. test with goodreads
+   FIXED — confirmed working with a real Goodreads export. Backend now
+   detects Goodreads vs StoryGraph columns automatically and handles
+   Goodreads' wrapped ISBN format (="1234567890").
+
+3. change "Import CSV" to "Upload your reading list"
+   FIXED — button renamed.
+
+4. search library instead of entering url (see Libby screenshot
+   "~/LibraryAssistant/docs/Add Library screen.png")
+   BLOCKED — that screenshot is on your computer, not uploaded here yet.
+   Need it before I can build this to match what you have in mind.
+
+5. no libraries selected by default
+   FIXED — all checkboxes (including Hoopla) now default unchecked.
+   Also closed a gap this surfaced: the backend used to silently search
+   Oakland+Berkeley+Hoopla if nothing was sent — now it returns a clear
+   error instead ("select at least one library"), and the UI won't let
+   you save/upload with zero libraries picked in the first place.
+
+6. make possible to pick Hoopla independently; remove "Hoopla" library
+   name from popup if all libraries share the same Hoopla behavior
+   FIXED — Hoopla is its own toggle, independent of Berkeley (this part
+   was done in an earlier round). Popup now shows just "Hoopla" instead
+   of the redundant "Hoopla · hoopla".
+
+7. app remembers which libraries are selected, session to session
+   ALREADY WORKING — tested this directly (save, reload, confirm), no
+   changes made. If you're seeing it fail in actual use, let me know
+   exactly what you did and what happened — that'll help me reproduce it.
+
+8. gear icon messed up
+   UNABLE TO REPRODUCE — checked the icon's underlying path math (clean
+   gear shape, clean circle) and its layout CSS, twice now, both check
+   out fine, and it renders correctly in my own test screenshots. Please
+   send a current screenshot of what looks wrong, or let me know if this
+   is actually resolved now.
+
+9. available logic: Available + eBook was showing books only available
+   as audiobook
+   FIXED — confirmed working.
+
+10. make icon for browser tab and app
+    FIXED — added a book-shaped favicon (browser tab), Apple touch icon
+    and manifest (phone home-screen icon). Needs a new static/ folder
+    with 6 files placed in it — see delivery notes.
+
+11. clicking title to get synopsis only worked on the left-hand side
+    FIXED — the entire row is now clickable, not just the title text.
+
+12. (found while testing, not originally reported) missing UTF-8 charset
+    tag — every "·" character in the app (subtitle, borrow-option labels)
+    was at risk of showing as "Â·" depending on the browser's encoding
+    guess
+    FIXED — added <meta charset="utf-8">.
+
+13.   figure out a way for users to add and search a single title. 
+   Have them enter title and author. Best if this is unstructured 
+   and app uses intelligence to figure out the specific book.
+
+14. add support for free ebook sites such as annas-archive.gl 
+
+15. 
+
+——————————————————————————————————————
+STILL OPEN — need something from you to move forward:
+- #4: upload the "Add Library screen.png" reference
+- #8: fresh screenshot of the gear icon, or confirm it's fine now
+- #7: confirm whether this has actually failed in real use, or if it's
+  fine and can be crossed off
