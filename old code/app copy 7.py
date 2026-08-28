@@ -65,10 +65,6 @@ LIBRARY_PRESETS = {
     "berkeley": {"key": "berkeley", "label": "Berkeley Public Library", "overdrive": "berkeleypubliclibrary"},
     "redwood_city": {"key": "redwood_city", "label": "Redwood City Public Library", "bibliocommons": "rcpl"},
     "hoopla": {"key": "hoopla", "label": "Hoopla", "hoopla": True},
-    "sfpl": {"key": "sfpl", "label": "San Francisco Public Library", "bibliocommons": "sfpl"},
-    "ssfpl": {"key": "ssfpl", "label": "South San Francisco Public Library", "bibliocommons": "ssfpl"},
-    "alameda_county": {"key": "alameda_county", "label": "Alameda County Library", "bibliocommons": "aclibrary"},
-    "contra_costa_county": {"key": "contra_costa_county", "label": "Contra Costa County Library", "bibliocommons": "ccclib"},
 }
 
 

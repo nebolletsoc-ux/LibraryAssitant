@@ -460,100 +460,19 @@
             line-height: 1.4;
         }
 
+        .library-options {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
         .library-option {
             display: flex;
             align-items: center;
             gap: 8px;
             cursor: pointer;
             font-weight: normal;
-        }
-
-        .library-option-hoopla {
-            margin: 4px 0 18px 0;
-        }
-
-        .hint {
-            font-weight: normal;
-            font-size: 12px;
-            color: #8793a6;
-        }
-
-        .library-search-box {
-            margin-bottom: 8px;
-        }
-
-        .library-search-box input {
-            width: 100%;
-            box-sizing: border-box;
-            padding: 10px 14px;
-            border: 1px solid #dce1e8;
-            border-radius: 10px;
-            font-size: 14px;
-        }
-
-        .library-search-results {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            margin-bottom: 6px;
-        }
-
-        .library-search-results:empty {
-            margin-bottom: 0;
-        }
-
-        .library-result-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 8px 10px;
-            background: #f5f6f8;
-            border-radius: 8px;
-        }
-
-        .library-result-info {
-            min-width: 0;
-        }
-
-        .library-result-name {
-            display: block;
-            font-size: 14px;
-            font-weight: 600;
-            color: #152033;
-        }
-
-        .library-result-city {
-            display: block;
-            font-size: 12px;
-            color: #8793a6;
-            margin-top: 1px;
-        }
-
-        .library-add-button {
-            flex: 0 0 auto;
-            border: none;
-            background: #111b2c;
-            color: white;
-            padding: 6px 14px;
-            border-radius: 14px;
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-        }
-
-        .library-no-results {
-            font-size: 13px;
-            color: #8793a6;
-            padding: 4px 2px;
-        }
-
-        .your-libraries-heading {
-            margin: 6px 0 8px 0;
-            font-size: 13px;
-            font-weight: 700;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
-            color: #8793a6;
         }
 
         .custom-library-list {
@@ -823,25 +742,30 @@
         <h2 id="config-title">Library settings</h2>
         <p>Choose which libraries to search. No login is required — we only check public catalog availability.</p>
 
-        <div class="library-search-box">
-            <input id="library-search" type="text"
-                   placeholder="Search by library name or city…"
-                   autocomplete="off">
+        <div class="library-options">
+            <label class="library-option">
+                <input type="checkbox" id="lib-oakland">
+                Oakland Public Library
+            </label>
+            <label class="library-option">
+                <input type="checkbox" id="lib-berkeley">
+                Berkeley Public Library
+            </label>
+            <label class="library-option">
+                <input type="checkbox" id="lib-redwood_city">
+                Redwood City Public Library
+            </label>
+            <label class="library-option">
+                <input type="checkbox" id="lib-hoopla">
+                Hoopla
+            </label>
         </div>
-        <div id="library-search-results" class="library-search-results"></div>
 
-        <label class="library-option library-option-hoopla">
-            <input type="checkbox" id="lib-hoopla">
-            Hoopla
-            <span class="hint">— shared catalog, not tied to one library</span>
-        </label>
-
-        <h3 class="your-libraries-heading">Your Libraries</h3>
         <div id="custom-library-list" class="custom-library-list"></div>
 
         <details style="margin-bottom:16px;">
             <summary style="cursor:pointer;font-size:13px;color:#0366d6;">
-                Can't find your library? Add it manually
+                Add another library
             </summary>
 
             <div class="add-library-fields">
@@ -875,21 +799,7 @@ let currentFilters = {
 };
 
 const LIBRARY_CONFIG_KEY = "libraryAssistant.libraries";
-
-// Curated, name-only list — the actual Bibliocommons/OverDrive subdomains
-// live server-side in app.py's LIBRARY_PRESETS (trusted, not client-supplied)
-// so a curated pick resolves the same trusted way a hardcoded preset always
-// has. This is a starting set verified against each library's real site;
-// libraries not listed here can still be added manually below.
-const CURATED_LIBRARIES = [
-    { key: "oakland", name: "Oakland Public Library", city: "Oakland, CA" },
-    { key: "berkeley", name: "Berkeley Public Library", city: "Berkeley, CA" },
-    { key: "redwood_city", name: "Redwood City Public Library", city: "Redwood City, CA" },
-    { key: "sfpl", name: "San Francisco Public Library", city: "San Francisco, CA" },
-    { key: "ssfpl", name: "South San Francisco Public Library", city: "South San Francisco, CA" },
-    { key: "alameda_county", name: "Alameda County Library", city: "Fremont, Newark, Union City, Dublin, Albany & unincorporated Alameda County, CA" },
-    { key: "contra_costa_county", name: "Contra Costa County Library", city: "Martinez, Concord, Antioch, Walnut Creek & other Contra Costa County cities, CA" }
-];
+const PRESET_LIBRARIES = ["oakland", "berkeley", "redwood_city", "hoopla"];
 
 function loadLibraryConfig() {
     try {
@@ -904,24 +814,13 @@ function saveLibraryConfig(config) {
     localStorage.setItem(LIBRARY_CONFIG_KEY, JSON.stringify(config));
 }
 
-// Unified list of everything the user has added — both curated picks
-// ({key, name}, subdomain resolved server-side) and manually-entered
-// custom libraries ({key, name, bibliocommons, overdrive}).
-let modalSelectedLibraries = [];
+let modalCustomLibraries = [];
 
-function renderSelectedLibraries() {
+function renderCustomLibraryList(customLibraries) {
     const list = document.getElementById("custom-library-list");
     list.innerHTML = "";
 
-    if (modalSelectedLibraries.length === 0) {
-        const empty = document.createElement("p");
-        empty.className = "library-no-results";
-        empty.textContent = "No libraries added yet — search above.";
-        list.appendChild(empty);
-        return;
-    }
-
-    modalSelectedLibraries.forEach(function(lib, index) {
+    customLibraries.forEach(function(lib, index) {
         const row = document.createElement("div");
         row.className = "custom-library-row";
 
@@ -933,9 +832,8 @@ function renderSelectedLibraries() {
         removeBtn.className = "remove-library";
         removeBtn.textContent = "Remove";
         removeBtn.addEventListener("click", function() {
-            modalSelectedLibraries.splice(index, 1);
-            renderSelectedLibraries();
-            renderLibrarySearchResults(document.getElementById("library-search").value);
+            customLibraries.splice(index, 1);
+            renderCustomLibraryList(customLibraries);
         });
 
         row.appendChild(label);
@@ -944,73 +842,20 @@ function renderSelectedLibraries() {
     });
 }
 
-function renderLibrarySearchResults(query) {
-    const container = document.getElementById("library-search-results");
-    container.innerHTML = "";
-
-    const trimmed = query.trim().toLowerCase();
-    if (!trimmed) return;
-
-    const selectedKeys = new Set(modalSelectedLibraries.map(l => l.key));
-
-    const matches = CURATED_LIBRARIES.filter(function(lib) {
-        if (selectedKeys.has(lib.key)) return false;
-        return (
-            lib.name.toLowerCase().includes(trimmed) ||
-            lib.city.toLowerCase().includes(trimmed)
-        );
-    }).slice(0, 8);
-
-    if (matches.length === 0) {
-        const empty = document.createElement("p");
-        empty.className = "library-no-results";
-        empty.textContent = "No matches — try \"Add it manually\" below.";
-        container.appendChild(empty);
-        return;
-    }
-
-    matches.forEach(function(lib) {
-        const row = document.createElement("div");
-        row.className = "library-result-row";
-
-        const info = document.createElement("div");
-        info.className = "library-result-info";
-
-        const name = document.createElement("span");
-        name.className = "library-result-name";
-        name.textContent = lib.name;
-
-        const city = document.createElement("span");
-        city.className = "library-result-city";
-        city.textContent = lib.city;
-
-        info.appendChild(name);
-        info.appendChild(city);
-
-        const addBtn = document.createElement("button");
-        addBtn.type = "button";
-        addBtn.className = "library-add-button";
-        addBtn.textContent = "Add";
-        addBtn.addEventListener("click", function() {
-            modalSelectedLibraries.push({ key: lib.key, name: lib.name });
-            renderSelectedLibraries();
-            renderLibrarySearchResults(document.getElementById("library-search").value);
-        });
-
-        row.appendChild(info);
-        row.appendChild(addBtn);
-        container.appendChild(row);
-    });
-}
-
 function defaultLibraryConfig() {
     return {
+        oakland: false,
+        berkeley: false,
+        redwood_city: false,
         hoopla: false,
-        selected: []
+        custom: []
     };
 }
 
 function applyLibraryConfigToCheckboxes(config) {
+    document.getElementById("lib-oakland").checked = !!config.oakland;
+    document.getElementById("lib-berkeley").checked = !!config.berkeley;
+    document.getElementById("lib-redwood_city").checked = !!config.redwood_city;
     document.getElementById("lib-hoopla").checked = !!config.hoopla;
 }
 
@@ -1019,10 +864,8 @@ function openConfigModal() {
 
     applyLibraryConfigToCheckboxes(config);
 
-    modalSelectedLibraries = (config.selected || []).slice();
-    document.getElementById("library-search").value = "";
-    document.getElementById("library-search-results").innerHTML = "";
-    renderSelectedLibraries();
+    modalCustomLibraries = (config.custom || []).slice();
+    renderCustomLibraryList(modalCustomLibraries);
 
     document.getElementById("config-overlay").style.display = "flex";
 }
@@ -1030,11 +873,16 @@ function openConfigModal() {
 function closeConfigModal(save = true) {
     if (save) {
         const config = {
+            oakland: document.getElementById("lib-oakland").checked,
+            berkeley: document.getElementById("lib-berkeley").checked,
+            redwood_city: document.getElementById("lib-redwood_city").checked,
             hoopla: document.getElementById("lib-hoopla").checked,
-            selected: modalSelectedLibraries.slice()
+            custom: modalCustomLibraries
         };
 
-        const hasAnySelected = config.hoopla || config.selected.length > 0;
+        const hasAnySelected =
+            config.oakland || config.berkeley || config.redwood_city ||
+            config.hoopla || config.custom.length > 0;
 
         if (!hasAnySelected) {
             alert("Select at least one library before saving.");
@@ -1050,9 +898,11 @@ function closeConfigModal(save = true) {
 function buildLibraryConfigPayload(config) {
     const payload = [];
 
-    if (config.hoopla) payload.push({ key: "hoopla" });
+    PRESET_LIBRARIES.forEach(function(key) {
+        if (config[key]) payload.push({ key: key });
+    });
 
-    (config.selected || []).forEach(function(lib) {
+    (config.custom || []).forEach(function(lib) {
         payload.push({
             key: lib.key,
             bibliocommons: lib.bibliocommons || null,
@@ -1072,10 +922,6 @@ document.getElementById("config-close").addEventListener("click", function() {
     closeConfigModal(false);
 });
 
-document.getElementById("library-search").addEventListener("input", function() {
-    renderLibrarySearchResults(this.value);
-});
-
 document.getElementById("custom-lib-add").addEventListener("click", function() {
     const nameInput = document.getElementById("custom-lib-name");
     const bibliocommonsInput = document.getElementById("custom-lib-bibliocommons");
@@ -1090,14 +936,14 @@ document.getElementById("custom-lib-add").addEventListener("click", function() {
         return;
     }
 
-    modalSelectedLibraries.push({
+    modalCustomLibraries.push({
         key: name.toLowerCase().replace(/[^a-z0-9]+/g, "_"),
         name: name,
         bibliocommons: bibliocommons || null,
         overdrive: overdrive || null
     });
 
-    renderSelectedLibraries();
+    renderCustomLibraryList(modalCustomLibraries);
 
     nameInput.value = "";
     bibliocommonsInput.value = "";
