@@ -9,11 +9,25 @@ from concurrent.futures import ThreadPoolExecutor
 
 from flask import Flask, render_template, request, jsonify
 
+from models import db, Book, UserBook, Availability, LibraryConfig
 from library.isbn import find_isbn
 from library.oakland import search_libraries
 
 
 app = Flask(__name__)
+
+# Database configuration
+database_url = os.environ.get("DATABASE_URL", "sqlite:///library_assistant.db")
+app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+# Initialize database
+db.init_app(app)
+
+# Create all tables on app startup
+with app.app_context():
+    db.create_all()
+
 
 # Optional shared-password gate. Off by default (no env var set = no prompt,
 # same as running locally today). Set APP_PASSWORD once this has a public
@@ -535,6 +549,280 @@ def status():
         "books": books,
         "finished": finished,
     })
+
+
+# ============================================================================
+# PHASE 1: STANDALONE TBR LIST — NEW API ENDPOINTS
+# ============================================================================
+
+@app.route("/api/books", methods=["GET"])
+def list_books():
+    """
+    Get the user's TBR list.
+    
+    Returns list of UserBook entries with full book data.
+    """
+    try:
+        user_books = UserBook.query.filter_by(user_id=1, status="tbr").all()
+        return jsonify([book.to_dict_with_book() for book in user_books])
+    except Exception as e:
+        print(f"Error listing books: {e}")
+        return jsonify({"error": "Failed to load books"}), 500
+
+
+@app.route("/api/books/search", methods=["POST"])
+def search_books():
+    """
+    Search for a book by title and author.
+    
+    Uses Open Library API to find matching books.
+    
+    Request body:
+        {
+            "title": "The Overstory",
+            "author": "Richard Powers"
+        }
+    
+    Returns a list of potential matches.
+    """
+    data = request.get_json() or {}
+    title = (data.get("title") or "").strip()
+    author = (data.get("author") or "").strip()
+    
+    if not title:
+        return jsonify({"error": "Title is required"}), 400
+    
+    try:
+        # Use Open Library's search API
+        query = f"{title}"
+        if author:
+            query += f" author:{author}"
+        
+        response = requests.get(
+            "https://openlibrary.org/search.json",
+            params={"title": title, "author": author, "limit": 10},
+            timeout=5,
+            headers={"User-Agent": "LibraryAssistant/1.0"}
+        )
+        
+        if response.status_code != 200:
+            return jsonify({"error": "Search failed"}), 500
+        
+        data = response.json()
+        results = []
+        
+        for doc in data.get("docs", []):
+            isbn = None
+            if doc.get("isbn"):
+                isbn = doc["isbn"][0]  # Take first ISBN
+            
+            result = {
+                "title": doc.get("title", ""),
+                "author": doc.get("author_name", ["Unknown"])[0] if doc.get("author_name") else "Unknown",
+                "isbn": isbn,
+                "cover_id": doc.get("cover_id"),
+                "year": doc.get("first_publish_year"),
+            }
+            
+            if result["isbn"]:  # Only include results with ISBN
+                results.append(result)
+        
+        return jsonify({"results": results[:10]})
+    
+    except Exception as e:
+        print(f"Search error: {e}")
+        return jsonify({"error": "Search failed"}), 500
+
+
+@app.route("/api/books", methods=["POST"])
+def add_book():
+    """
+    Add a book to the user's TBR list.
+    
+    Request body:
+        {
+            "title": "The Overstory",
+            "author": "Richard Powers",
+            "isbn": "9780393635522",
+            "cover_url": "https://...",
+            "synopsis": "...",
+            "genre": "Fiction"
+        }
+    
+    If the book already exists in the database, reuse it.
+    Then create a UserBook entry if not already in the user's list.
+    """
+    data = request.get_json() or {}
+    title = (data.get("title") or "").strip()
+    author = (data.get("author") or "").strip()
+    isbn = (data.get("isbn") or "").strip()
+    
+    if not title or not isbn:
+        return jsonify({"error": "Title and ISBN are required"}), 400
+    
+    try:
+        # Check if book already exists
+        book = Book.query.filter_by(isbn=isbn).first()
+        
+        if not book:
+            # Create new book record
+            book = Book(
+                isbn=isbn,
+                title=title,
+                author=author,
+                cover_url=data.get("cover_url"),
+                synopsis=data.get("synopsis"),
+                genre=data.get("genre"),
+            )
+            db.session.add(book)
+            db.session.commit()
+        
+        # Check if already in user's TBR
+        user_book = UserBook.query.filter_by(
+            user_id=1,
+            book_id=book.id,
+            status="tbr"
+        ).first()
+        
+        if user_book:
+            return jsonify({"error": "Book already in your TBR"}), 409
+        
+        # Add to user's TBR
+        user_book = UserBook(
+            user_id=1,
+            book_id=book.id,
+            status="tbr"
+        )
+        db.session.add(user_book)
+        db.session.commit()
+        
+        return jsonify(user_book.to_dict_with_book()), 201
+    
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error adding book: {e}")
+        return jsonify({"error": "Failed to add book"}), 500
+
+
+@app.route("/api/books/<int:user_book_id>", methods=["DELETE"])
+def remove_book(user_book_id):
+    """
+    Remove a book from the user's TBR list.
+    """
+    try:
+        user_book = UserBook.query.filter_by(id=user_book_id, user_id=1).first()
+        
+        if not user_book:
+            return jsonify({"error": "Book not found"}), 404
+        
+        db.session.delete(user_book)
+        db.session.commit()
+        
+        return jsonify({"message": "Book removed"}), 200
+    
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error removing book: {e}")
+        return jsonify({"error": "Failed to remove book"}), 500
+
+
+@app.route("/api/books/<int:user_book_id>/check", methods=["POST"])
+def check_availability(user_book_id):
+    """
+    Trigger an availability check for a book and return results.
+    
+    This is a synchronous check (not queued like CSV import).
+    Results are cached in the database.
+    """
+    try:
+        user_book = UserBook.query.filter_by(id=user_book_id, user_id=1).first()
+        
+        if not user_book or not user_book.book:
+            return jsonify({"error": "Book not found"}), 404
+        
+        book = user_book.book
+        
+        # Get user's library configuration
+        library_configs = LibraryConfig.query.filter_by(user_id=1, enabled=True).all()
+        
+        if not library_configs:
+            return jsonify({"error": "No libraries configured"}), 400
+        
+        # Convert to format expected by search_libraries
+        configs = []
+        for lib in library_configs:
+            config = {"key": lib.library_key}
+            if lib.bibliocommons:
+                config["bibliocommons"] = lib.bibliocommons
+            if lib.overdrive:
+                config["overdrive"] = lib.overdrive
+            if lib.hoopla:
+                config["hoopla"] = True
+            configs.append(config)
+        
+        # Search libraries
+        results = search_libraries(book.title, book.author, configs)
+        
+        # Clear old availability records for this book
+        Availability.query.filter_by(book_id=book.id).delete()
+        
+        # Store results in database
+        for result in results:
+            avail = Availability(
+                book_id=book.id,
+                library=getattr(result, "library", "unknown"),
+                provider=getattr(result, "provider", "unknown"),
+                format=getattr(result, "format", "unknown"),
+                available=getattr(result, "available", False),
+                wait_text=getattr(result, "wait", None),
+                holds=getattr(result, "holds", None),
+                wait_weeks=getattr(result, "wait_weeks", None),
+                url=getattr(result, "url", None),
+            )
+            db.session.add(avail)
+        
+        # Update last_checked_at
+        user_book.last_checked_at = __import__("datetime").datetime.utcnow()
+        
+        db.session.commit()
+        
+        # Return results
+        availability_data = [a.to_dict() for a in Availability.query.filter_by(book_id=book.id).all()]
+        
+        return jsonify({
+            "book": book.to_dict(),
+            "availability": availability_data,
+        }), 200
+    
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error checking availability: {e}")
+        return jsonify({"error": "Failed to check availability"}), 500
+
+
+@app.route("/api/books/<int:user_book_id>/availability", methods=["GET"])
+def get_availability(user_book_id):
+    """
+    Get cached availability for a book.
+    """
+    try:
+        user_book = UserBook.query.filter_by(id=user_book_id, user_id=1).first()
+        
+        if not user_book or not user_book.book:
+            return jsonify({"error": "Book not found"}), 404
+        
+        book = user_book.book
+        availability = Availability.query.filter_by(book_id=book.id).all()
+        
+        return jsonify({
+            "book": book.to_dict(),
+            "availability": [a.to_dict() for a in availability],
+            "last_checked_at": user_book.last_checked_at.isoformat() if user_book.last_checked_at else None,
+        }), 200
+    
+    except Exception as e:
+        print(f"Error getting availability: {e}")
+        return jsonify({"error": "Failed to get availability"}), 500
 
 
 if __name__ == "__main__":
