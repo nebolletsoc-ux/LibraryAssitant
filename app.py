@@ -551,6 +551,12 @@ def status():
     })
 
 
+@app.route("/tbr")
+def tbr():
+    """Render the Phase 1 standalone TBR list interface."""
+    return render_template("tbr.html")
+
+
 # ============================================================================
 # PHASE 1: STANDALONE TBR LIST — NEW API ENDPOINTS
 # ============================================================================

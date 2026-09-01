@@ -1,0 +1,731 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Library Assistant — TBR</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#101b2d">
+
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: #ffffff;
+            color: #142033;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                         Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        #app {
+            width: 100%;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .app-header {
+            padding: 30px 32px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #e4e8ed;
+        }
+
+        .app-title {
+            margin: 0;
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            color: #101b2d;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn {
+            border: none;
+            border-radius: 8px;
+            padding: 10px 16px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #111b2c;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1a2a3f;
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border: 1px solid #dce1e8;
+            color: #68758a;
+        }
+
+        .btn-secondary:hover {
+            border-color: #999;
+            color: #333;
+        }
+
+        .btn-icon {
+            padding: 8px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+        }
+
+        .btn-icon svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        #status {
+            padding: 16px 32px;
+            font-size: 14px;
+            color: #7d8999;
+            display: none;
+        }
+
+        #status.show {
+            display: block;
+        }
+
+        .content {
+            padding: 0 32px 32px;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+
+        .search-box input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid #dce1e8;
+            border-radius: 8px;
+            font-size: 15px;
+            outline: none;
+        }
+
+        .search-box input:focus {
+            border-color: #111b2c;
+            box-shadow: 0 0 0 2px rgba(17, 27, 44, 0.1);
+        }
+
+        .search-box button {
+            padding: 12px 20px;
+        }
+
+        .book-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 16px;
+        }
+
+        .book-card {
+            border: 1px solid #dce1e8;
+            border-radius: 12px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: white;
+        }
+
+        .book-card:hover {
+            border-color: #999;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .book-cover {
+            width: 100%;
+            aspect-ratio: 2 / 3;
+            background: #f1f3f6;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 8px;
+            overflow: hidden;
+            font-size: 12px;
+            color: #9aa5b5;
+            text-align: center;
+            padding: 8px;
+        }
+
+        .book-cover img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .book-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            line-height: 1.3;
+        }
+
+        .book-author {
+            font-size: 12px;
+            color: #7d8999;
+            display: -webkit-box;
+            -webkit-line-clamp: 1;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .search-results {
+            background: white;
+            border: 1px solid #dce1e8;
+            border-radius: 8px;
+            max-height: 400px;
+            overflow-y: auto;
+            position: absolute;
+            width: calc(100% - 64px);
+            max-width: 400px;
+            z-index: 100;
+        }
+
+        .search-result-item {
+            padding: 12px 16px;
+            border-bottom: 1px solid #e4e8ed;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .search-result-item:last-child {
+            border-bottom: none;
+        }
+
+        .search-result-item:hover {
+            background: #f6f8fa;
+        }
+
+        .search-result-text {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .search-result-title {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 2px;
+        }
+
+        .search-result-author {
+            font-size: 12px;
+            color: #7d8999;
+        }
+
+        .search-result-add {
+            background: #111b2c;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            margin-left: 12px;
+        }
+
+        .search-result-add:hover {
+            background: #1a2a3f;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 32px;
+            color: #7d8999;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .empty-state-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #142033;
+            margin-bottom: 8px;
+        }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.show {
+            display: flex;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 12px;
+            padding: 32px;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            border: none;
+            background: transparent;
+            font-size: 24px;
+            cursor: pointer;
+            color: #9aa5b5;
+        }
+
+        .book-detail {
+            display: flex;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        .book-detail-cover {
+            width: 120px;
+            height: 180px;
+            background: #f1f3f6;
+            border-radius: 8px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .book-detail-cover img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .book-detail-info h2 {
+            margin: 0 0 4px;
+            font-size: 22px;
+            color: #101b2d;
+        }
+
+        .book-detail-author {
+            color: #7d8999;
+            font-size: 15px;
+            margin-bottom: 12px;
+        }
+
+        .availability-section {
+            margin-top: 24px;
+        }
+
+        .availability-section h3 {
+            margin: 0 0 12px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #101b2d;
+        }
+
+        .availability-item {
+            padding: 12px;
+            border: 1px solid #dce1e8;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .availability-item.available {
+            background: #f0fdf4;
+            border-color: #86efac;
+        }
+
+        .availability-item.waitlist {
+            background: #fffbeb;
+            border-color: #fde047;
+        }
+
+        .availability-info {
+            flex: 1;
+        }
+
+        .availability-provider {
+            font-weight: 600;
+            font-size: 14px;
+            color: #101b2d;
+        }
+
+        .availability-format {
+            font-size: 12px;
+            color: #7d8999;
+            margin-top: 2px;
+        }
+
+        .availability-status {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+
+        .availability-status.available {
+            background: #86efac;
+            color: #166534;
+        }
+
+        .availability-status.waitlist {
+            background: #fde047;
+            color: #713f12;
+        }
+
+        .availability-status.unavailable {
+            background: #d1d5db;
+            color: #374151;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .modal-actions button {
+            flex: 1;
+            padding: 12px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #dce1e8;
+            border-top-color: #111b2c;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <header class="app-header">
+            <h1 class="app-title">📚 My Books</h1>
+            <div class="header-actions">
+                <button class="btn btn-primary" id="add-book-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 5v14M5 12h14"/>
+                    </svg>
+                    Add Book
+                </button>
+            </div>
+        </header>
+
+        <div id="status"></div>
+
+        <div class="content">
+            <div class="search-box">
+                <input 
+                    type="text" 
+                    id="search-input" 
+                    placeholder="Search for a book by title or author…"
+                    autocomplete="off"
+                >
+                <div id="search-results" class="search-results" style="display: none;"></div>
+            </div>
+
+            <div id="books-container"></div>
+        </div>
+    </div>
+
+    <div id="book-modal" class="modal-overlay">
+        <div class="modal">
+            <button class="modal-close" id="modal-close">&times;</button>
+            <div id="modal-content"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = "/api";
+        let allBooks = [];
+        let searchTimeout = null;
+
+        // Initialize
+        loadBooks();
+
+        document.getElementById("add-book-btn").addEventListener("click", () => {
+            document.getElementById("search-input").focus();
+        });
+
+        document.getElementById("search-input").addEventListener("input", handleSearch);
+        document.getElementById("modal-close").addEventListener("click", closeModal);
+
+        async function loadBooks() {
+            try {
+                const response = await fetch(`${API_BASE}/books`);
+                allBooks = await response.json();
+                renderBooks();
+            } catch (e) {
+                showStatus(`Error loading books: ${e.message}`, "error");
+            }
+        }
+
+        function renderBooks() {
+            const container = document.getElementById("books-container");
+            
+            if (allBooks.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📖</div>
+                        <div class="empty-state-title">No books yet</div>
+                        <p>Search for a book above to add it to your TBR list.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const grid = allBooks.map(ub => `
+                <div class="book-card" onclick="openBookModal(${ub.id})">
+                    <div class="book-cover">
+                        ${ub.book?.cover_url 
+                            ? `<img src="${ub.book.cover_url}" alt="${ub.book.title}">` 
+                            : "No cover"}
+                    </div>
+                    <div class="book-title">${ub.book?.title || "Unknown"}</div>
+                    <div class="book-author">${ub.book?.author || "Unknown"}</div>
+                </div>
+            `).join("");
+
+            container.innerHTML = `<div class="book-grid">${grid}</div>`;
+        }
+
+        function handleSearch() {
+            const query = document.getElementById("search-input").value.trim();
+            
+            if (!query) {
+                document.getElementById("search-results").style.display = "none";
+                return;
+            }
+
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => performSearch(query), 300);
+        }
+
+        async function performSearch(query) {
+            const [title, ...authorParts] = query.split(" by ");
+            const author = authorParts.join(" by ") || "";
+
+            try {
+                const response = await fetch(`${API_BASE}/books/search`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ title, author })
+                });
+
+                const data = await response.json();
+                displaySearchResults(data.results || []);
+            } catch (e) {
+                console.error("Search failed:", e);
+            }
+        }
+
+        function displaySearchResults(results) {
+            const container = document.getElementById("search-results");
+            
+            if (results.length === 0) {
+                container.style.display = "none";
+                return;
+            }
+
+            const html = results.map(r => `
+                <div class="search-result-item">
+                    <div class="search-result-text">
+                        <div class="search-result-title">${r.title}</div>
+                        <div class="search-result-author">${r.author}</div>
+                    </div>
+                    <button class="search-result-add" onclick="addBook(
+                        '${r.title.replace(/'/g, "\\'")}',
+                        '${r.author.replace(/'/g, "\\'")}',
+                        '${r.isbn}',
+                        '${r.cover_id ? `https://covers.openlibrary.org/b/id/${r.cover_id}-M.jpg` : ''}'
+                    )">Add</button>
+                </div>
+            `).join("");
+
+            container.innerHTML = html;
+            container.style.display = "block";
+        }
+
+        async function addBook(title, author, isbn, coverUrl) {
+            try {
+                const response = await fetch(`${API_BASE}/books`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ title, author, isbn, cover_url: coverUrl })
+                });
+
+                if (response.status === 409) {
+                    showStatus("Book already in your TBR", "warning");
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error("Failed to add book");
+                }
+
+                document.getElementById("search-input").value = "";
+                document.getElementById("search-results").style.display = "none";
+                
+                await loadBooks();
+                showStatus("Book added!", "success");
+            } catch (e) {
+                showStatus(`Error: ${e.message}`, "error");
+            }
+        }
+
+        async function openBookModal(userBookId) {
+            try {
+                const userBook = allBooks.find(b => b.id === userBookId);
+                if (!userBook) return;
+
+                const response = await fetch(`${API_BASE}/books/${userBookId}/availability`);
+                const data = await response.json();
+
+                const book = data.book;
+                const availability = data.availability || [];
+
+                let availHtml = "";
+                if (availability.length === 0) {
+                    availHtml = `
+                        <div style="padding: 12px; color: #7d8999; text-align: center;">
+                            <button class="btn btn-primary" style="margin: 0 auto;" 
+                                onclick="checkAvailability(${userBookId})">
+                                Check Availability
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    availHtml = availability.map(a => `
+                        <div class="availability-item ${a.available ? "available" : a.wait_text ? "waitlist" : ""}">
+                            <div class="availability-info">
+                                <div class="availability-provider">${a.provider} · ${a.library}</div>
+                                <div class="availability-format">${a.format}</div>
+                                ${a.wait_text ? `<div style="font-size: 12px; color: #d98a10; margin-top: 4px;">${a.wait_text}${a.holds ? ` · ${a.holds} hold(s)` : ""}</div>` : ""}
+                            </div>
+                            <div class="availability-status ${a.available ? "available" : a.wait_text ? "waitlist" : "unavailable"}">
+                                ${a.available ? "Available" : a.wait_text ? "Waitlist" : "Unavailable"}
+                            </div>
+                        </div>
+                    `).join("");
+                }
+
+                const html = `
+                    <div class="book-detail">
+                        <div class="book-detail-cover">
+                            ${book.cover_url ? `<img src="${book.cover_url}">` : "No cover"}
+                        </div>
+                        <div class="book-detail-info">
+                            <h2>${book.title}</h2>
+                            <div class="book-detail-author">${book.author}</div>
+                            ${book.synopsis ? `<p style="font-size: 14px; line-height: 1.5; color: #333;">${book.synopsis.substring(0, 200)}…</p>` : ""}
+                        </div>
+                    </div>
+                    <div class="availability-section">
+                        <h3>Availability</h3>
+                        ${availHtml}
+                    </div>
+                    <div class="modal-actions">
+                        <button class="btn btn-secondary" onclick="removeBook(${userBookId})">Remove from TBR</button>
+                    </div>
+                `;
+
+                document.getElementById("modal-content").innerHTML = html;
+                document.getElementById("book-modal").classList.add("show");
+            } catch (e) {
+                showStatus(`Error: ${e.message}`, "error");
+            }
+        }
+
+        async function checkAvailability(userBookId) {
+            try {
+                const btn = event.target;
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner"></span> Checking…';
+
+                const response = await fetch(`${API_BASE}/books/${userBookId}/check`, {
+                    method: "POST"
+                });
+
+                if (!response.ok) throw new Error("Check failed");
+
+                await openBookModal(userBookId);
+                await loadBooks();
+            } catch (e) {
+                showStatus(`Error: ${e.message}`, "error");
+            }
+        }
+
+        async function removeBook(userBookId) {
+            if (!confirm("Remove this book from your TBR?")) return;
+
+            try {
+                await fetch(`${API_BASE}/books/${userBookId}`, { method: "DELETE" });
+                closeModal();
+                await loadBooks();
+                showStatus("Book removed", "success");
+            } catch (e) {
+                showStatus(`Error: ${e.message}`, "error");
+            }
+        }
+
+        function closeModal() {
+            document.getElementById("book-modal").classList.remove("show");
+        }
+
+        function showStatus(message, type = "info") {
+            const status = document.getElementById("status");
+            status.textContent = message;
+            status.className = `show ${type}`;
+            setTimeout(() => status.classList.remove("show"), 3000);
+        }
+    </script>
+</body>
+</html>
