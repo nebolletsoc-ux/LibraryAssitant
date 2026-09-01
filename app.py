@@ -27,6 +27,43 @@ db.init_app(app)
 # Create all tables on app startup
 with app.app_context():
     db.create_all()
+    
+    # Initialize default library configuration
+    if LibraryConfig.query.count() == 0:
+        default_configs = [
+            LibraryConfig(
+                user_id=1,
+                library_key="oakland",
+                label="Oakland Public Library",
+                bibliocommons="oaklandlibrary",
+                enabled=False
+            ),
+            LibraryConfig(
+                user_id=1,
+                library_key="berkeley",
+                label="Berkeley Public Library",
+                overdrive="berkeleypubliclibrary",
+                enabled=False
+            ),
+            LibraryConfig(
+                user_id=1,
+                library_key="redwood_city",
+                label="Redwood City Public Library",
+                bibliocommons="rcpl",
+                enabled=False
+            ),
+            LibraryConfig(
+                user_id=1,
+                library_key="hoopla",
+                label="Hoopla",
+                hoopla=True,
+                enabled=False
+            ),
+        ]
+        for config in default_configs:
+            db.session.add(config)
+        db.session.commit()
+        print("✓ Initialized default library configuration")
 
 
 # Optional shared-password gate. Off by default (no env var set = no prompt,
@@ -829,6 +866,47 @@ def get_availability(user_book_id):
     except Exception as e:
         print(f"Error getting availability: {e}")
         return jsonify({"error": "Failed to get availability"}), 500
+
+
+@app.route("/api/libraries", methods=["GET"])
+def get_libraries():
+    """
+    Get all available libraries and their current enabled status.
+    """
+    try:
+        libraries = LibraryConfig.query.filter_by(user_id=1).all()
+        return jsonify([lib.to_dict() for lib in libraries])
+    except Exception as e:
+        print(f"Error getting libraries: {e}")
+        return jsonify({"error": "Failed to get libraries"}), 500
+
+
+@app.route("/api/libraries/<int:library_id>", methods=["PATCH"])
+def update_library(library_id):
+    """
+    Enable or disable a library.
+    
+    Request body:
+        {
+            "enabled": true/false
+        }
+    """
+    try:
+        library = LibraryConfig.query.filter_by(id=library_id, user_id=1).first()
+        
+        if not library:
+            return jsonify({"error": "Library not found"}), 404
+        
+        data = request.get_json() or {}
+        library.enabled = bool(data.get("enabled", library.enabled))
+        
+        db.session.commit()
+        return jsonify(library.to_dict()), 200
+    
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error updating library: {e}")
+        return jsonify({"error": "Failed to update library"}), 500
 
 
 if __name__ == "__main__":
