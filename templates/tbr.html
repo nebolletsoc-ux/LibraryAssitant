@@ -450,6 +450,12 @@
         <header class="app-header">
             <h1 class="app-title">📚 My Books</h1>
             <div class="header-actions">
+                <button class="btn btn-secondary btn-icon" id="settings-btn" title="Library settings">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m6.08 0l4.24-4.24M1 12h6m6 0h6m-1.78 7.78l-4.24-4.24m-6.08 0l-4.24 4.24"/>
+                    </svg>
+                </button>
                 <button class="btn btn-primary" id="add-book-btn">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M12 5v14M5 12h14"/>
@@ -483,20 +489,80 @@
         </div>
     </div>
 
+    <div id="settings-modal" class="modal-overlay">
+        <div class="modal">
+            <button class="modal-close" id="settings-close">&times;</button>
+            <h2 style="margin-top: 0;">Library Settings</h2>
+            <p style="font-size: 14px; color: #7d8999;">Select which libraries to search when checking availability.</p>
+            <div id="libraries-list" style="margin: 20px 0;"></div>
+            <button class="btn btn-primary" style="width: 100%;" id="settings-save">Done</button>
+        </div>
+    </div>
+
     <script>
         const API_BASE = "/api";
         let allBooks = [];
         let searchTimeout = null;
+        let libraryConfigs = [];
 
         // Initialize
         loadBooks();
+        loadLibraries();
 
         document.getElementById("add-book-btn").addEventListener("click", () => {
             document.getElementById("search-input").focus();
         });
 
+        document.getElementById("settings-btn").addEventListener("click", openSettings);
+        document.getElementById("settings-close").addEventListener("click", closeSettings);
+        document.getElementById("settings-save").addEventListener("click", closeSettings);
+
         document.getElementById("search-input").addEventListener("input", handleSearch);
         document.getElementById("modal-close").addEventListener("click", closeModal);
+
+        async function loadLibraries() {
+            try {
+                const response = await fetch(`${API_BASE}/libraries`);
+                libraryConfigs = await response.json();
+                renderLibraryCheckboxes();
+            } catch (e) {
+                console.error("Error loading libraries:", e);
+            }
+        }
+
+        function renderLibraryCheckboxes() {
+            const container = document.getElementById("libraries-list");
+            const html = libraryConfigs.map(lib => `
+                <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; cursor: pointer;">
+                    <input type="checkbox" ${lib.enabled ? "checked" : ""} 
+                           onchange="updateLibrary(${lib.id}, this.checked)">
+                    <span>${lib.label}</span>
+                </label>
+            `).join("");
+            container.innerHTML = html;
+        }
+
+        async function updateLibrary(libId, enabled) {
+            try {
+                await fetch(`${API_BASE}/libraries/${libId}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ enabled })
+                });
+                // Reload to update the UI
+                await loadLibraries();
+            } catch (e) {
+                console.error("Error updating library:", e);
+            }
+        }
+
+        function openSettings() {
+            document.getElementById("settings-modal").classList.add("show");
+        }
+
+        function closeSettings() {
+            document.getElementById("settings-modal").classList.remove("show");
+        }
 
         async function loadBooks() {
             try {
