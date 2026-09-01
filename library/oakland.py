@@ -989,6 +989,11 @@ def _extract_oakland_hoopla(
 
     Oakland may expose Hoopla links through its catalog.
     We return all matching Hoopla title URLs found there.
+
+    Note: Results are tagged with library="hoopla" because Hoopla is a
+    shared catalog, not tied to any specific library. This ensures they
+    display correctly in the frontend regardless of which library's search
+    found them.
     """
 
     urls = _find_hoopla_candidates(
@@ -1034,7 +1039,7 @@ def _extract_oakland_hoopla(
 
         results.append(
             result(
-                library="oakland",
+                library="hoopla",
                 provider="Hoopla",
                 format_name=format_name,
                 available=True,
@@ -1122,10 +1127,11 @@ def search_bibliocommons(subdomain, library_key, title, author, timeout=15):
 
     results = _extract_oakland_hoopla(response.text, title, author)
 
-    # Retag results with the requested library key instead of "oakland"
+    # Retag non-Hoopla results with the requested library key.
+    # Hoopla results already have library="hoopla" and should not be changed.
     return [
         result(
-            library=library_key,
+            library=r.library if r.provider == "Hoopla" else library_key,
             provider=r.provider,
             format_name=r.format,
             available=r.available,

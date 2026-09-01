@@ -1,0 +1,307 @@
+LIBRARY ASSISTANT — ENGINEERING PLAN
+Product direction: standalone app with library availability checking
+
+GOAL
+Turn the current Library Assistant prototype into a real app that non-programmer users can use without exporting a CSV from StoryGraph or Goodreads.
+
+CORE PRODUCT
+The app should answer:
+“Where can I get the books I want to read?”
+
+StoryGraph and Goodreads should be optional sources for adding books, not dependencies of the product.
+
+CURRENT PROTOTYPE
+- Python/Flask application.
+- Imports StoryGraph CSV.
+- Identifies books and ISBNs.
+- Searches Oakland and Berkeley library systems.
+- Checks Libby/OverDrive and Hoopla.
+- Displays availability and waitlists.
+- User can click book titles for synopsis.
+- Library selection/configuration exists.
+- Project is maintained in Git.
+
+PRODUCT ROADMAP
+
+PHASE 1 — STANDALONE TBR LIST
+Priority: HIGH
+
+Replace the CSV-first workflow with an internal book list.
+
+Features:
+- Add a book by title/author.
+- Search for a book.
+- Add book to personal TBR.
+- Remove book.
+- Store title, author, ISBN, cover, synopsis.
+- Automatically check configured libraries after adding.
+- Keep the existing library availability engine.
+
+Suggested UI:
+My Books
++ Add Book
+
+Each book shows:
+- Title
+- Author
+- Cover
+- Availability by library
+- Format
+- Available / Waitlist / Not found
+- Link to the library/provider.
+
+PHASE 2 — SHARE SHEET / URL IMPORT
+Priority: HIGH
+
+Allow users to send a book to Library Assistant from another app.
+
+Example:
+StoryGraph or Goodreads
+→ Share
+→ Library Assistant
+→ identify title/author/ISBN
+→ add to TBR
+→ check libraries
+
+Also support URLs from:
+- StoryGraph
+- Goodreads
+- Amazon
+- publisher/book pages
+- other supported book sites
+
+Important:
+Do not require access to the user's entire Goodreads or StoryGraph account.
+
+PHASE 3 — iOS APP
+Priority: HIGH FOR PUBLIC DISTRIBUTION
+
+Move the user-facing application from the Flask web prototype to a native or cross-platform mobile app.
+
+Recommended architecture:
+- iOS frontend
+- Python backend/API
+- Existing library-search modules behind an API
+- Database for users/books/library configuration
+
+Possible technology choices:
+- SwiftUI for native iOS.
+- Alternatively React Native/Expo if cross-platform support becomes important.
+- Keep Python for the existing backend/library integrations.
+
+PHASE 4 — SAFARI EXTENSION
+Priority: MEDIUM
+
+Provide a “Check my libraries” action while viewing a book page.
+
+Example:
+User views The Overstory on StoryGraph.
+Safari extension detects:
+- title
+- author
+- ISBN when available
+
+User selects:
+Check my libraries
+
+The extension sends the book information to Library Assistant.
+
+PHASE 5 — STORYGRAPH IMPORT
+Priority: MEDIUM / EXPERIMENTAL
+
+Investigate automated StoryGraph TBR import without requiring CSV.
+
+Potential approaches:
+- Official API, if/when available.
+- User-authorized integration if StoryGraph provides one.
+- Browser/session-based import only if technically and legally appropriate.
+
+Do not make the product fundamentally dependent on scraping StoryGraph.
+
+PHASE 6 — GOODREADS
+Priority: LOW
+
+Do not build the product around the Goodreads API.
+
+Goodreads has historically restricted new API access, so a direct account integration should not be assumed.
+
+Possible alternatives:
+- Share Sheet.
+- URL import.
+- Browser extension.
+- CSV import as a fallback.
+
+TECHNICAL ARCHITECTURE
+
+FRONTEND
+Responsibilities:
+- Book list.
+- Add/search book.
+- Book detail.
+- Availability display.
+- Library settings.
+- Loading/progress states.
+- User account/authentication.
+
+BACKEND
+Responsibilities:
+- Book identification.
+- ISBN lookup.
+- Library searches.
+- Availability normalization.
+- Synopsis/metadata retrieval.
+- User/library configuration.
+- API endpoints.
+
+DATABASE
+Store:
+- User
+- Book
+- UserBook/TBR relationship
+- Library
+- UserLibrary selection
+- Availability results/cache
+- Optional search history
+
+BOOK DATA
+Use a reliable book metadata source to resolve:
+- title
+- author
+- ISBN
+- cover
+- synopsis
+
+ISBN matching should not assume the first Open Library result is always correct. Improve matching using title/author similarity and edition information.
+
+LIBRARY INTEGRATIONS
+
+Current:
+- Oakland
+- Berkeley
+- Libby/OverDrive
+- Hoopla
+
+Future:
+- Additional Bibliocommons libraries.
+- Additional OverDrive libraries.
+- Other providers where technically practical.
+
+Normalize all results into one internal format:
+
+library
+provider
+format
+available
+wait
+url
+
+IMPORTANT LIBRARY SEARCH DESIGN
+
+The library engine should be independent of the frontend.
+
+Frontend should call something conceptually like:
+
+GET /api/books/{book_id}/availability
+
+The backend returns normalized results.
+
+This allows the current Python search code to survive a frontend rewrite.
+
+CACHING
+Library availability changes frequently.
+
+Use short-lived caching to:
+- reduce repeated requests
+- speed up results
+- avoid excessive load on library/provider systems
+
+Do not treat cached availability as permanently current.
+
+USER EXPERIENCE
+
+Primary workflow:
+
+1. Open app.
+2. Tap Add Book.
+3. Search title/author.
+4. Select correct book.
+5. App immediately checks libraries.
+6. Results show where it is available.
+7. User taps result to borrow/view the library item.
+
+Secondary workflow:
+
+1. Find book elsewhere.
+2. Share to Library Assistant.
+3. App identifies book.
+4. App adds it.
+5. Availability appears automatically.
+
+CSV IMPORT
+Keep CSV import as a fallback.
+
+It should not be the primary onboarding workflow.
+
+PUBLIC APP REQUIREMENTS
+
+Before distribution:
+- User accounts or secure local storage.
+- Privacy policy.
+- Terms of service.
+- Error handling.
+- Rate limiting.
+- Logging/monitoring.
+- Secure API credentials.
+- Database backups.
+- App Store compliance.
+- Clear disclosure about third-party library/provider links.
+- Avoid storing unnecessary user data.
+
+COST / TIME ROUGH ORDER
+
+Prototype → usable public beta:
+Approximately 2–4 months for a part-time solo developer, depending heavily on the amount of native-app work and library integrations.
+
+Major cost categories:
+- Apple Developer Program: annual fee.
+- Hosting/backend: initially potentially tens of dollars per month.
+- Database: potentially free/low-cost at small scale.
+- Domain/email: modest annual cost.
+- Monitoring: initially free/low-cost.
+- AI/development tools: optional.
+- App Store distribution: Apple Developer membership required.
+
+The largest investment is development time, not infrastructure.
+
+RECOMMENDED DEVELOPMENT ORDER
+
+1. Freeze the current working prototype in Git.
+2. Refactor library searching into a clean backend service/API.
+3. Build internal TBR database.
+4. Build Add Book/search workflow.
+5. Make availability checking work from an internally stored book.
+6. Add URL/Share Sheet ingestion.
+7. Build mobile frontend.
+8. Add authentication/sync.
+9. Add Safari extension.
+10. Keep CSV import as fallback.
+11. Beta test with a small group.
+12. Prepare App Store release.
+13. Add libraries/providers incrementally.
+
+DO NOT DO YET
+
+- Do not spend substantial time trying to obtain private Goodreads access.
+- Do not make StoryGraph scraping the core architecture.
+- Do not rewrite the proven library-search code unnecessarily.
+- Do not build every possible library integration before the basic product workflow works.
+- Do not optimize for thousands of users before validating the product with a small beta group.
+
+KEY PRODUCT PRINCIPLE
+
+The product should own the user's TBR list.
+
+External services should be convenient ways to add books.
+
+The core value is:
+“Find out where I can read/listen to this book right now.”
