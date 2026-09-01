@@ -667,8 +667,9 @@ def search_books():
                 "year": doc.get("first_publish_year"),
             }
             
-            if result["isbn"]:  # Only include results with ISBN
-                results.append(result)
+            # Include all results regardless of ISBN
+            # (ISBN will be looked up when book is added to library search)
+            results.append(result)
         
         return jsonify({"results": results[:10]})
     
@@ -699,9 +700,21 @@ def add_book():
     title = (data.get("title") or "").strip()
     author = (data.get("author") or "").strip()
     isbn = (data.get("isbn") or "").strip()
+
+    if not title:
+        return jsonify({"error": "Title is required"}), 400
     
-    if not title or not isbn:
-        return jsonify({"error": "Title and ISBN are required"}), 400
+    # Generate a synthetic ISBN if not provided (using cover_id or title+author hash)
+    if not isbn:
+        import hashlib
+        cover_id = data.get("cover_id")
+        if cover_id:
+            # Use cover_id as part of the synthetic ISBN
+            isbn = f"cover-{cover_id}"
+        else:
+            # Use hash of title + author
+            hash_input = f"{title}|{author}"
+            isbn = f"synthetic-{hashlib.md5(hash_input.encode()).hexdigest()[:12]}"
     
     try:
         # Check if book already exists

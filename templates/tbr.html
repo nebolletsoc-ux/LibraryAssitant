@@ -650,8 +650,8 @@
                     <button class="search-result-add" onclick="addBook(
                         '${r.title.replace(/'/g, "\\'")}',
                         '${r.author.replace(/'/g, "\\'")}',
-                        '${r.isbn}',
-                        '${r.cover_id ? `https://covers.openlibrary.org/b/id/${r.cover_id}-M.jpg` : ''}'
+                            '${r.isbn || ""}',
+                            '${r.cover_id ? `https://covers.openlibrary.org/b/id/${r.cover_id}-M.jpg` : ""}'
                     )">Add</button>
                 </div>
             `).join("");
