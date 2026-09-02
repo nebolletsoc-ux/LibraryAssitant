@@ -785,6 +785,66 @@ def add_book():
         return jsonify({"error": "Failed to add book"}), 500
 
 
+@app.route("/api/books/import-csv", methods=["POST"])
+def import_tbr_csv():
+    """Import to-read books from a Goodreads or StoryGraph export."""
+    csv_file = request.files.get("books_file")
+    if not csv_file or not csv_file.filename:
+        return jsonify({"error": "Choose a Goodreads or StoryGraph CSV file."}), 400
+
+    if not csv_file.filename.lower().endswith(".csv"):
+        return jsonify({"error": "Upload a CSV file."}), 400
+
+    try:
+        imported_books = load_books(csv_file)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    added = 0
+    skipped = 0
+    try:
+        for imported_book in imported_books:
+            title = imported_book["title"]
+            author = imported_book.get("author") or "Unknown"
+            isbn = imported_book.get("isbn")
+
+            if not isbn:
+                import hashlib
+                hash_input = f"{title}|{author}"
+                isbn = f"synthetic-{hashlib.md5(hash_input.encode()).hexdigest()[:12]}"
+
+            book = Book.query.filter_by(isbn=isbn).first()
+            if not book:
+                book = Book(
+                    isbn=isbn,
+                    title=title,
+                    author=author,
+                    synopsis=imported_book.get("synopsis"),
+                    genre=imported_book.get("genre"),
+                )
+                db.session.add(book)
+                db.session.flush()
+
+            user_book = UserBook.query.filter_by(
+                user_id=1,
+                book_id=book.id,
+                status="tbr",
+            ).first()
+            if user_book:
+                skipped += 1
+                continue
+
+            db.session.add(UserBook(user_id=1, book_id=book.id, status="tbr"))
+            added += 1
+
+        db.session.commit()
+        return jsonify({"total": len(imported_books), "added": added, "skipped": skipped}), 201
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error importing TBR CSV: {e}")
+        return jsonify({"error": "Failed to import this CSV."}), 500
+
+
 @app.route("/api/books/<int:user_book_id>", methods=["DELETE"])
 def remove_book(user_book_id):
     """

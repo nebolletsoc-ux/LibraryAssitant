@@ -418,6 +418,9 @@
                 <button class="btn btn-secondary" id="refresh-availability-btn">
                     Refresh availability
                 </button>
+                <button class="btn btn-secondary" id="upload-tbr-btn">
+                    Upload TBR list
+                </button>
                 <button class="btn btn-primary" id="add-book-btn">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M12 5v14M5 12h14"/>
@@ -461,6 +464,25 @@
         </div>
     </div>
 
+    <div id="upload-modal" class="modal-overlay">
+        <div class="modal">
+            <button class="modal-close" id="upload-close">&times;</button>
+            <h2 style="margin-top: 0;">Upload TBR list</h2>
+            <p style="font-size: 14px; color: #7d8999; line-height: 1.5;">
+                Export your to-read shelf from Goodreads or StoryGraph, then upload the CSV here.
+            </p>
+            <div style="font-size: 14px; line-height: 1.6; margin: 16px 0;">
+                <strong>Goodreads</strong><br>
+                My Books → Import and export → Export Library, then download the CSV.<br><br>
+                <strong>StoryGraph</strong><br>
+                Menu → Manage Account → Export Library, then download your shelf CSV.
+            </div>
+            <input type="file" id="csv-file-input" accept=".csv,text/csv" style="display: none;">
+            <button class="btn btn-primary" id="select-csv-btn">Upload CSV</button>
+            <div id="selected-csv-name" style="font-size: 13px; color: #7d8999; margin-top: 12px;"></div>
+        </div>
+    </div>
+
     <script>
         const API_BASE = "/api";
         let allBooks = [];
@@ -477,8 +499,14 @@
 
         document.getElementById("settings-btn").addEventListener("click", openSettings);
         document.getElementById("refresh-availability-btn").addEventListener("click", checkAllAvailability);
+        document.getElementById("upload-tbr-btn").addEventListener("click", openUpload);
         document.getElementById("settings-close").addEventListener("click", closeSettings);
         document.getElementById("settings-save").addEventListener("click", closeSettings);
+        document.getElementById("upload-close").addEventListener("click", closeUpload);
+        document.getElementById("select-csv-btn").addEventListener("click", () => {
+            document.getElementById("csv-file-input").click();
+        });
+        document.getElementById("csv-file-input").addEventListener("change", importCsv);
 
         document.getElementById("search-input").addEventListener("input", handleSearch);
         document.getElementById("modal-close").addEventListener("click", closeModal);
@@ -525,6 +553,50 @@
 
         function closeSettings() {
             document.getElementById("settings-modal").classList.remove("show");
+        }
+
+        function openUpload() {
+            document.getElementById("upload-modal").classList.add("show");
+        }
+
+        function closeUpload() {
+            document.getElementById("upload-modal").classList.remove("show");
+            document.getElementById("csv-file-input").value = "";
+            document.getElementById("selected-csv-name").textContent = "";
+        }
+
+        async function importCsv(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const button = document.getElementById("select-csv-btn");
+            const fileName = document.getElementById("selected-csv-name");
+            const originalText = button.textContent;
+            fileName.textContent = file.name;
+            button.disabled = true;
+            button.innerHTML = '<span class="spinner"></span> Importing';
+
+            try {
+                const formData = new FormData();
+                formData.append("books_file", file);
+                const response = await fetch(`${API_BASE}/books/import-csv`, {
+                    method: "POST",
+                    body: formData,
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.error || "CSV import failed");
+                }
+
+                closeUpload();
+                await loadBooks();
+                showStatus(`Imported ${data.added} of ${data.total} to-read books${data.skipped ? `; ${data.skipped} already in your list` : ""}.`, "success");
+            } catch (e) {
+                showStatus(`Error: ${e.message}`, "error");
+            } finally {
+                button.disabled = false;
+                button.textContent = originalText;
+            }
         }
 
         async function loadBooks() {
