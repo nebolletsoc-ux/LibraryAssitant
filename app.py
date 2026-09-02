@@ -5,6 +5,7 @@ import os
 import threading
 import time
 import requests
+from requests import RequestException
 from concurrent.futures import ThreadPoolExecutor
 
 from flask import Flask, render_template, request, jsonify
@@ -607,7 +608,17 @@ def list_books():
     """
     try:
         user_books = UserBook.query.filter_by(user_id=1, status="tbr").all()
-        return jsonify([book.to_dict_with_book() for book in user_books])
+        books = []
+        for user_book in user_books:
+            book_data = user_book.to_dict_with_book()
+            availability = user_book.book.availability if user_book.book else []
+            book_data["availability_summary"] = {
+                "checked": user_book.last_checked_at is not None,
+                "available_now": any(result.available for result in availability),
+            }
+            books.append(book_data)
+
+        return jsonify(books)
     except Exception as e:
         print(f"Error listing books: {e}")
         return jsonify({"error": "Failed to load books"}), 500
@@ -637,21 +648,29 @@ def search_books():
     
     try:
         # Use Open Library's search API
-        query = f"{title}"
-        if author:
-            query += f" author:{author}"
-        
+        query = " ".join(part for part in (title, author) if part)
+        search_params = {"q": query, "limit": 10}
+
         response = requests.get(
             "https://openlibrary.org/search.json",
-            params={"title": title, "author": author, "limit": 10},
+            params=search_params,
             timeout=5,
             headers={"User-Agent": "LibraryAssistant/1.0"}
         )
-        
-        if response.status_code != 200:
-            return jsonify({"error": "Search failed"}), 500
-        
-        data = response.json()
+
+        response.raise_for_status()
+        try:
+            data = response.json()
+        except ValueError:
+            return jsonify({
+                "error": "Book search is temporarily unavailable. Please try again."
+            }), 503
+
+        if not isinstance(data, dict):
+            return jsonify({
+                "error": "Book search is temporarily unavailable. Please try again."
+            }), 503
+
         results = []
         
         for doc in data.get("docs", []):
@@ -672,7 +691,13 @@ def search_books():
             results.append(result)
         
         return jsonify({"results": results[:10]})
-    
+
+    except RequestException as e:
+        print(f"Open Library search error: {e}")
+        return jsonify({
+            "error": "Book search is temporarily unavailable. Please try again."
+        }), 503
+
     except Exception as e:
         print(f"Search error: {e}")
         return jsonify({"error": "Search failed"}), 500
@@ -796,57 +821,16 @@ def check_availability(user_book_id):
         if not user_book or not user_book.book:
             return jsonify({"error": "Book not found"}), 404
         
-        book = user_book.book
-        
-        # Get user's library configuration
-        library_configs = LibraryConfig.query.filter_by(user_id=1, enabled=True).all()
-        
-        if not library_configs:
-            return jsonify({"error": "No libraries configured"}), 400
-        
-        # Convert to format expected by search_libraries
-        configs = []
-        for lib in library_configs:
-            config = {"key": lib.library_key}
-            if lib.bibliocommons:
-                config["bibliocommons"] = lib.bibliocommons
-            if lib.overdrive:
-                config["overdrive"] = lib.overdrive
-            if lib.hoopla:
-                config["hoopla"] = True
-            configs.append(config)
-        
-        # Search libraries
-        results = search_libraries(book.title, book.author, configs)
-        
-        # Clear old availability records for this book
-        Availability.query.filter_by(book_id=book.id).delete()
-        
-        # Store results in database
-        for result in results:
-            avail = Availability(
-                book_id=book.id,
-                library=getattr(result, "library", "unknown"),
-                provider=getattr(result, "provider", "unknown"),
-                format=getattr(result, "format", "unknown"),
-                available=getattr(result, "available", False),
-                wait_text=getattr(result, "wait", None),
-                holds=getattr(result, "holds", None),
-                wait_weeks=getattr(result, "wait_weeks", None),
-                url=getattr(result, "url", None),
-            )
-            db.session.add(avail)
-        
-        # Update last_checked_at
-        user_book.last_checked_at = __import__("datetime").datetime.utcnow()
-        
-        db.session.commit()
+        _refresh_availability(user_book, _library_search_configs())
         
         # Return results
-        availability_data = [a.to_dict() for a in Availability.query.filter_by(book_id=book.id).all()]
+        availability_data = [
+            availability.to_dict()
+            for availability in Availability.query.filter_by(book_id=user_book.book.id).all()
+        ]
         
         return jsonify({
-            "book": book.to_dict(),
+            "book": user_book.book.to_dict(),
             "availability": availability_data,
         }), 200
     
@@ -854,6 +838,73 @@ def check_availability(user_book_id):
         db.session.rollback()
         print(f"Error checking availability: {e}")
         return jsonify({"error": "Failed to check availability"}), 500
+
+
+def _library_search_configs():
+    """Return enabled library settings in the catalog search format."""
+    configs = []
+    for library in LibraryConfig.query.filter_by(user_id=1, enabled=True).all():
+        config = {"key": library.library_key}
+        if library.bibliocommons:
+            config["bibliocommons"] = library.bibliocommons
+        if library.overdrive:
+            config["overdrive"] = library.overdrive
+        if library.hoopla:
+            config["hoopla"] = True
+        configs.append(config)
+    return configs
+
+
+def _refresh_availability(user_book, configs):
+    """Replace cached availability for one TBR entry."""
+    book = user_book.book
+    results = search_libraries(book.title, book.author, configs)
+    Availability.query.filter_by(book_id=book.id).delete()
+
+    for result in results:
+        db.session.add(Availability(
+            book_id=book.id,
+            library=getattr(result, "library", "unknown"),
+            provider=getattr(result, "provider", "unknown"),
+            format=getattr(result, "format", "unknown"),
+            available=getattr(result, "available", False),
+            wait_text=getattr(result, "wait", None),
+            holds=getattr(result, "holds", None),
+            wait_weeks=getattr(result, "wait_weeks", None),
+            url=getattr(result, "url", None),
+        ))
+
+    user_book.last_checked_at = __import__("datetime").datetime.utcnow()
+    db.session.commit()
+
+
+@app.route("/api/books/check-all", methods=["POST"])
+def check_all_availability():
+    """Refresh every TBR entry, retaining successful checks if one fails."""
+    configs = _library_search_configs()
+    if not configs:
+        return jsonify({"error": "No libraries configured"}), 400
+
+    user_books = UserBook.query.filter_by(user_id=1, status="tbr").all()
+    failures = []
+    checked = 0
+
+    for user_book in user_books:
+        user_book_id = user_book.id
+        book_title = user_book.book.title
+        try:
+            _refresh_availability(user_book, configs)
+            checked += 1
+        except Exception as e:
+            db.session.rollback()
+            print(f"Error checking {book_title}: {e}")
+            failures.append({"id": user_book_id, "title": book_title})
+
+    return jsonify({
+        "total": len(user_books),
+        "checked": checked,
+        "failures": failures,
+    }), 200
 
 
 @app.route("/api/books/<int:user_book_id>/availability", methods=["GET"])
