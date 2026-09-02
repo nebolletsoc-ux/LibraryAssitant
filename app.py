@@ -612,9 +612,22 @@ def list_books():
         for user_book in user_books:
             book_data = user_book.to_dict_with_book()
             availability = user_book.book.availability if user_book.book else []
+            formats = []
+            seen_formats = set()
+            for result in availability:
+                key = (result.format, result.available, result.wait_text)
+                if key in seen_formats:
+                    continue
+                seen_formats.add(key)
+                formats.append({
+                    "format": result.format,
+                    "available": result.available,
+                    "wait_text": result.wait_text,
+                })
             book_data["availability_summary"] = {
                 "checked": user_book.last_checked_at is not None,
                 "available_now": any(result.available for result in availability),
+                "formats": formats,
             }
             books.append(book_data)
 
