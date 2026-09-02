@@ -110,13 +110,13 @@
         }
 
         .search-box {
-            display: flex;
-            gap: 8px;
+            position: relative;
             margin-bottom: 24px;
         }
 
         .search-box input {
-            flex: 1;
+            box-sizing: border-box;
+            width: 100%;
             padding: 12px 16px;
             border: 1px solid #dce1e8;
             border-radius: 8px;
@@ -135,14 +135,13 @@
 
         .book-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            gap: 16px;
+            gap: 8px;
         }
 
         .book-card {
             border: 1px solid #dce1e8;
-            border-radius: 12px;
-            padding: 12px;
+            border-radius: 8px;
+            padding: 12px 16px;
             cursor: pointer;
             transition: all 0.2s;
             background: white;
@@ -151,28 +150,6 @@
         .book-card:hover {
             border-color: #999;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-        }
-
-        .book-cover {
-            width: 100%;
-            aspect-ratio: 2 / 3;
-            background: #f1f3f6;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 8px;
-            overflow: hidden;
-            font-size: 12px;
-            color: #9aa5b5;
-            text-align: center;
-            padding: 8px;
-        }
-
-        .book-cover img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
         }
 
         .book-title {
@@ -202,8 +179,10 @@
             max-height: 400px;
             overflow-y: auto;
             position: absolute;
-            width: calc(100% - 64px);
-            max-width: 400px;
+            top: calc(100% + 4px);
+            left: 0;
+            width: 100%;
+            box-sizing: border-box;
             z-index: 100;
         }
 
@@ -314,27 +293,7 @@
         }
 
         .book-detail {
-            display: flex;
-            gap: 24px;
             margin-bottom: 24px;
-        }
-
-        .book-detail-cover {
-            width: 120px;
-            height: 180px;
-            background: #f1f3f6;
-            border-radius: 8px;
-            flex-shrink: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-        }
-
-        .book-detail-cover img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
         }
 
         .book-detail-info h2 {
@@ -456,6 +415,9 @@
                         <path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m6.08 0l4.24-4.24M1 12h6m6 0h6m-1.78 7.78l-4.24-4.24m-6.08 0l-4.24 4.24"/>
                     </svg>
                 </button>
+                <button class="btn btn-secondary" id="refresh-availability-btn">
+                    Refresh availability
+                </button>
                 <button class="btn btn-primary" id="add-book-btn">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M12 5v14M5 12h14"/>
@@ -514,6 +476,7 @@
         });
 
         document.getElementById("settings-btn").addEventListener("click", openSettings);
+        document.getElementById("refresh-availability-btn").addEventListener("click", checkAllAvailability);
         document.getElementById("settings-close").addEventListener("click", closeSettings);
         document.getElementById("settings-save").addEventListener("click", closeSettings);
 
@@ -590,13 +553,11 @@
 
             const grid = allBooks.map(ub => `
                 <div class="book-card" onclick="openBookModal(${ub.id})">
-                    <div class="book-cover">
-                        ${ub.book?.cover_url 
-                            ? `<img src="${ub.book.cover_url}" alt="${ub.book.title}">` 
-                            : "No cover"}
-                    </div>
                     <div class="book-title">${ub.book?.title || "Unknown"}</div>
                     <div class="book-author">${ub.book?.author || "Unknown"}</div>
+                    <div class="availability-status ${ub.availability_summary?.available_now ? "available" : "unavailable"}" style="display: inline-block; margin-top: 8px;">
+                        ${ub.availability_summary?.checked ? (ub.availability_summary.available_now ? "Available now" : "Not available") : "Not checked"}
+                    </div>
                 </div>
             `).join("");
 
@@ -627,9 +588,13 @@
                 });
 
                 const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.error || "Book search failed");
+                }
                 displaySearchResults(data.results || []);
             } catch (e) {
                 console.error("Search failed:", e);
+                showStatus(e.message, "error");
             }
         }
 
@@ -650,8 +615,7 @@
                     <button class="search-result-add" onclick="addBook(
                         '${r.title.replace(/'/g, "\\'")}',
                         '${r.author.replace(/'/g, "\\'")}',
-                            '${r.isbn || ""}',
-                            '${r.cover_id ? `https://covers.openlibrary.org/b/id/${r.cover_id}-M.jpg` : ""}'
+                        '${r.isbn || ""}'
                     )">Add</button>
                 </div>
             `).join("");
@@ -660,12 +624,12 @@
             container.style.display = "block";
         }
 
-        async function addBook(title, author, isbn, coverUrl) {
+        async function addBook(title, author, isbn) {
             try {
                 const response = await fetch(`${API_BASE}/books`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ title, author, isbn, cover_url: coverUrl })
+                    body: JSON.stringify({ title, author, isbn })
                 });
 
                 if (response.status === 409) {
@@ -700,11 +664,15 @@
 
                 let availHtml = "";
                 if (availability.length === 0) {
+                    const checkedMessage = data.last_checked_at
+                        ? "No matching copies found in your selected libraries."
+                        : "Availability has not been checked yet.";
                     availHtml = `
                         <div style="padding: 12px; color: #7d8999; text-align: center;">
+                            <p style="margin: 0 0 12px;">${checkedMessage}</p>
                             <button class="btn btn-primary" style="margin: 0 auto;" 
                                 onclick="checkAvailability(${userBookId})">
-                                Check Availability
+                                ${data.last_checked_at ? "Check again" : "Check Availability"}
                             </button>
                         </div>
                     `;
@@ -725,9 +693,6 @@
 
                 const html = `
                     <div class="book-detail">
-                        <div class="book-detail-cover">
-                            ${book.cover_url ? `<img src="${book.cover_url}">` : "No cover"}
-                        </div>
                         <div class="book-detail-info">
                             <h2>${book.title}</h2>
                             <div class="book-detail-author">${book.author}</div>
@@ -766,6 +731,30 @@
                 await loadBooks();
             } catch (e) {
                 showStatus(`Error: ${e.message}`, "error");
+            }
+        }
+
+        async function checkAllAvailability() {
+            const button = document.getElementById("refresh-availability-btn");
+            const originalText = button.textContent;
+            button.disabled = true;
+            button.innerHTML = '<span class="spinner"></span> Checking all';
+
+            try {
+                const response = await fetch(`${API_BASE}/books/check-all`, { method: "POST" });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.error || "Availability check failed");
+                }
+
+                await loadBooks();
+                const failed = data.failures.length;
+                showStatus(`Checked ${data.checked} of ${data.total} books${failed ? `; ${failed} could not be checked` : ""}.`, failed ? "warning" : "success");
+            } catch (e) {
+                showStatus(`Error: ${e.message}`, "error");
+            } finally {
+                button.disabled = false;
+                button.textContent = originalText;
             }
         }
 

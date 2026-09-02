@@ -47,6 +47,16 @@ Use this as a prompt for an AI agent: “Implement the following tasks in order.
 
 ## Phase 1 – Core MVP: import, check, show
 
+### Current implementation status (September 2026)
+- The standalone TBR view supports manual book search, a compact text-only list, library selection, and a whole-list availability refresh.
+- CSV import remains the primary product workflow and must be restored in the TBR view before Phase 1 is considered complete.
+- Availability matching needs regression coverage: a known available title must not be reported unavailable after a refresh.
+
+### Remaining Phase 1 priorities
+1. Add an **Upload TBR list** action that opens StoryGraph/Goodreads export instructions and an **Upload CSV** control.
+2. Parse the uploaded CSV and add its books to the persisted TBR list.
+3. Verify provider availability results against known titles, including Berkeley Libby results such as *The Lager Queen of Minnesota*.
+
 ### 1.1 CSV upload & parsing (frontend + backend)
 
 #### 1.1.1 Frontend: CSV upload UI

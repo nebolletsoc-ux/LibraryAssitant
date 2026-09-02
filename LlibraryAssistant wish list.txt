@@ -1,4 +1,6 @@
 Feature, Priority, Description
+Availability accuracy regression, critical, A title previously identified as available can be reported unavailable after a refresh. Investigate provider matching and caching; for example The Lager Queen of Minnesota was previously available on Berkeley Libby but now displays unavailable.
+Upload TBR list from CSV, critical, Restore the primary Goodreads and StoryGraph import workflow in the TBR view. Add an Upload TBR list button that opens export instructions and an Upload CSV button that parses the file and adds its books to the persisted TBR list.
 Sort button, nice to have, a drop down button with the following choices (Available, Latest Added, Earliest Added, Author: A-Z, Author Z-A, Title A-Z, Title Z-A) which sorts the results accordingly
 Informative status bar, need to have, status bar gives granular info about what is going on, for instance, while displaying "Uploading CSV" it shows the title it is currently uploading and similar while checking availability
 Live link to StoryGraph/goodreads list, low priority, web page updates automatically when storygraph/goodreads list is updated
