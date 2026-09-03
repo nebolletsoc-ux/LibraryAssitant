@@ -253,9 +253,9 @@
         }
 
         .available-pill.active {
-            background: white;
-            border-color: #dce1e8;
-            color: #69768a;
+            background: #111b2c !important;
+            border-color: #111b2c !important;
+            color: white !important;
         }
 
         .available-circle {
@@ -266,7 +266,7 @@
         }
 
         .available-pill.active .available-circle {
-            border-color: #aeb8c6;
+            border-color: white;
         }
 
         .available-count {
@@ -574,12 +574,6 @@
                 <button class="btn btn-secondary" id="upload-tbr-btn">
                     Upload TBR list
                 </button>
-                <button class="btn btn-primary" id="add-book-btn">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 5v14M5 12h14"/>
-                    </svg>
-                    Add Book
-                </button>
             </div>
         </header>
 
@@ -615,7 +609,7 @@
                         Audio
                     </button>
                 </div>
-                <button class="available-pill active" id="available-filter" type="button">
+                <button class="available-pill" id="available-filter" type="button">
                     <span class="available-circle"></span>
                     Available
                     <span class="available-count" id="available-count">0</span>
@@ -666,17 +660,25 @@
         const API_BASE = "/api";
         let allBooks = [];
         let searchTimeout = null;
+        let searchGeneration = 0;
         let libraryConfigs = [];
         let activeFormat = "all";
         let availableOnly = false;
 
+        function syncAvailableFilter() {
+            const button = document.getElementById("available-filter");
+            button.classList.toggle("active", availableOnly);
+            button.style.backgroundColor = availableOnly ? "#111b2c" : "white";
+            button.style.borderColor = availableOnly ? "#111b2c" : "#dce1e8";
+            button.style.color = availableOnly ? "white" : "#69768a";
+            button.querySelector(".available-circle").style.borderColor = availableOnly ? "white" : "#aeb8c6";
+        }
+
+        syncAvailableFilter();
+
         // Initialize
         loadBooks();
         loadLibraries();
-
-        document.getElementById("add-book-btn").addEventListener("click", () => {
-            document.getElementById("search-input").focus();
-        });
 
         document.getElementById("settings-btn").addEventListener("click", openSettings);
         document.getElementById("refresh-availability-btn").addEventListener("click", checkAllAvailability);
@@ -701,7 +703,7 @@
         });
         document.getElementById("available-filter").addEventListener("click", () => {
             availableOnly = !availableOnly;
-            document.getElementById("available-filter").classList.toggle("active", availableOnly);
+            syncAvailableFilter();
             renderBooks();
         });
 
@@ -805,6 +807,7 @@
 
         function renderBooks() {
             const container = document.getElementById("books-container");
+            syncAvailableFilter();
             
             if (allBooks.length === 0) {
                 container.innerHTML = `
@@ -821,11 +824,17 @@
             document.getElementById("available-count").textContent = availableCount;
             const filteredBooks = allBooks.filter(ub => {
                 const formats = ub.availability_summary?.formats || [];
-                const matchesFormat = activeFormat === "all" || formats.some(item => {
+
+                if (activeFormat === "all") {
+                    return !availableOnly || ub.availability_summary?.available_now;
+                }
+
+                const matchingFormats = formats.filter(item => {
                     const format = (item.format || "").toLowerCase();
                     return activeFormat === "ebook" ? format.includes("ebook") : format.includes("audio");
                 });
-                return matchesFormat && (!availableOnly || ub.availability_summary?.available_now);
+                return matchingFormats.length > 0
+                    && (!availableOnly || matchingFormats.some(item => item.available));
             });
 
             const grid = filteredBooks.map(ub => `
@@ -857,17 +866,25 @@
 
         function handleSearch() {
             const query = document.getElementById("search-input").value.trim();
+            searchGeneration += 1;
+            clearTimeout(searchTimeout);
             
             if (!query) {
-                document.getElementById("search-results").style.display = "none";
+                clearSearchResults();
                 return;
             }
 
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => performSearch(query), 300);
+            const generation = searchGeneration;
+            searchTimeout = setTimeout(() => performSearch(query, generation), 300);
         }
 
-        async function performSearch(query) {
+        function clearSearchResults() {
+            const container = document.getElementById("search-results");
+            container.innerHTML = "";
+            container.style.display = "none";
+        }
+
+        async function performSearch(query, generation) {
             const [title, ...authorParts] = query.split(" by ");
             const author = authorParts.join(" by ") || "";
 
@@ -878,6 +895,9 @@
                     body: JSON.stringify({ title, author })
                 });
                 const data = await response.json();
+                if (generation !== searchGeneration || query !== document.getElementById("search-input").value.trim()) {
+                    return;
+                }
                 if (!response.ok) {
                     throw new Error(data.error || "Book search failed");
                 }
@@ -892,7 +912,7 @@
             const container = document.getElementById("search-results");
             
             if (results.length === 0) {
-                container.style.display = "none";
+                clearSearchResults();
                 return;
             }
 
@@ -916,6 +936,8 @@
 
         async function addBook(title, author, isbn) {
             try {
+                searchGeneration += 1;
+                clearTimeout(searchTimeout);
                 const response = await fetch(`${API_BASE}/books`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -932,7 +954,7 @@
                 }
 
                 document.getElementById("search-input").value = "";
-                document.getElementById("search-results").style.display = "none";
+                clearSearchResults();
                 
                 await loadBooks();
                 showStatus("Book added!", "success");
