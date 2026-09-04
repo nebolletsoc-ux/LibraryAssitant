@@ -1,195 +1,381 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Library Assistant — TBR</title>
+    <title>MyNextRead</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
     <link rel="manifest" href="/static/manifest.json">
-    <meta name="theme-color" content="#101b2d">
+    <meta name="theme-color" content="#F5F1EB">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@700;800&display=swap" rel="stylesheet">
 
     <style>
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
-            margin: 0;
-            padding: 0;
-            background: #ffffff;
-            color: #142033;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
-                         Roboto, Helvetica, Arial, sans-serif;
+            background: #F5F1EB;
+            color: #1C1917;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            -webkit-font-smoothing: antialiased;
         }
 
         #app {
-            width: 100%;
-            max-width: 900px;
+            min-height: 100vh;
+            max-width: 480px;
             margin: 0 auto;
         }
 
+        .h-serif { font-family: 'Plus Jakarta Sans', sans-serif; }
+
+        /* ---------- Header ---------- */
+
         .app-header {
-            padding: 30px 32px 20px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.95);
+            border-bottom: 1px solid rgba(203, 213, 225, 0.7);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        .header-row {
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid #e4e8ed;
+            justify-content: space-between;
+            padding: 16px 16px 10px;
         }
 
         .app-title {
-            margin: 0;
-            font-size: 32px;
-            font-weight: 700;
-            letter-spacing: -0.5px;
-            color: #101b2d;
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            line-height: 1;
+            color: #1C1917;
         }
 
         .header-actions {
             display: flex;
-            gap: 12px;
+            align-items: center;
+            gap: 8px;
         }
 
-        .btn {
-            border: none;
-            border-radius: 8px;
-            padding: 10px 16px;
-            font-size: 15px;
+        .pill-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 999px;
+            border: 1px solid #E2E8F0;
+            background: #fff;
+            color: #475569;
+            font-size: 12px;
             font-weight: 600;
+            font-family: inherit;
             cursor: pointer;
+            transition: border-color .15s, background .15s, color .15s;
+            line-height: 1.4;
+        }
+
+        .pill-btn:hover { border-color: #CBD5E1; background: #F8FAFC; }
+        .pill-btn:disabled { opacity: .6; cursor: default; }
+
+        .pill-btn svg { flex-shrink: 0; }
+
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .spin { animation: spin 1s linear infinite; }
+
+        .libraries-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #B45309;
+            padding: 2px;
+        }
+
+        .libraries-btn span {
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        /* ---------- Search ---------- */
+
+        .search-wrap {
+            padding: 0 16px 10px;
+        }
+
+        .search-box { position: relative; }
+
+        .search-box input {
+            width: 100%;
+            padding: 8px 34px 8px 32px;
+            background: #F1F5F9;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            color: #0F172A;
+            outline: none;
+            font-family: inherit;
+            transition: box-shadow .15s;
+        }
+
+        .search-box input::placeholder { color: #94A3B8; }
+        .search-box input:focus { box-shadow: 0 0 0 2px rgba(245, 194, 97, 0.6); }
+
+        .search-icon {
+            position: absolute;
+            left: 11px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #94A3B8;
+            pointer-events: none;
+        }
+
+        .clear-btn {
+            position: absolute;
+            right: 9px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #94A3B8;
+            cursor: pointer;
+            padding: 2px;
+        }
+
+        /* ---------- Filter bar ---------- */
+
+        .filter-bar {
             display: flex;
             align-items: center;
             gap: 6px;
-            transition: all 0.2s;
+            padding: 0 16px 12px;
+            overflow-x: auto;
+            scrollbar-width: none;
         }
 
-        .btn-primary {
-            background: #111b2c;
-            color: white;
+        .filter-bar::-webkit-scrollbar { display: none; }
+
+        .filter-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+            font-family: inherit;
+            cursor: pointer;
+            border: 1px solid #E2E8F0;
+            background: #fff;
+            color: #64748B;
+            transition: all .15s;
+            flex-shrink: 0;
         }
 
-        .btn-primary:hover {
-            background: #1a2a3f;
+        .filter-pill.active {
+            background: #1C1917;
+            border-color: #1C1917;
+            color: #fff;
         }
 
-        .btn-secondary {
-            background: transparent;
-            border: 1px solid #dce1e8;
-            color: #68758a;
+        .filter-pill svg { flex-shrink: 0; }
+
+        .filter-divider {
+            width: 1px;
+            height: 16px;
+            background: #E2E8F0;
+            flex-shrink: 0;
         }
 
-        .btn-secondary:hover {
-            border-color: #999;
-            color: #333;
+        .available-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+            font-family: inherit;
+            cursor: pointer;
+            border: 1px solid #E2E8F0;
+            background: #fff;
+            color: #64748B;
+            transition: all .15s;
+            flex-shrink: 0;
         }
 
-        .btn-icon {
-            padding: 8px;
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
+        .available-pill.active {
+            background: #16A34A;
+            border-color: #16A34A;
+            color: #fff;
         }
 
-        .btn-icon svg {
-            width: 24px;
-            height: 24px;
+        .dot {
+            display: inline-flex;
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            border: 1.5px solid #94A3B8;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
         }
 
-        #status {
-            padding: 16px 32px;
-            font-size: 14px;
-            color: #7d8999;
-            display: none;
-        }
-
-        #status.show {
+        .available-pill.active .dot { border-color: #fff; }
+        .available-pill.active .dot-fill {
+            width: 4px;
+            height: 4px;
+            border-radius: 999px;
+            background: #fff;
             display: block;
         }
 
-        .content {
-            padding: 0 32px 32px;
+        .available-count {
+            background: #DCFCE7;
+            color: #15803D;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 0 8px;
+            border-radius: 999px;
+            line-height: 16px;
+            tabular-nums: tabular-nums;
+            font-variant-numeric: tabular-nums;
         }
 
-        .search-box {
-            position: relative;
-            margin-bottom: 24px;
+        .available-pill.active .available-count {
+            background: rgba(255, 255, 255, 0.25);
+            color: #fff;
         }
 
-        .search-box input {
-            box-sizing: border-box;
+        /* ---------- Sort dropdown ---------- */
+
+        .sort-wrap { position: relative; flex-shrink: 0; }
+
+        .sort-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #64748B;
+            border: 1px solid #E2E8F0;
+            background: #fff;
+            cursor: pointer;
+            font-family: inherit;
+            white-space: nowrap;
+            transition: border-color .15s;
+        }
+
+        .sort-btn:hover { border-color: #CBD5E1; }
+
+        .sort-menu {
+            position: fixed;
+            background: #fff;
+            border: 1px solid #E2E8F0;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+            overflow: hidden;
+            width: 192px;
+            z-index: 40;
+        }
+
+        .sort-option {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
             width: 100%;
             padding: 12px 16px;
-            border: 1px solid #dce1e8;
-            border-radius: 8px;
-            font-size: 15px;
-            outline: none;
+            font-size: 14px;
+            text-align: left;
+            background: #fff;
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+            color: #334155;
+            transition: background .1s;
         }
 
-        .search-box input:focus {
-            border-color: #111b2c;
-            box-shadow: 0 0 0 2px rgba(17, 27, 44, 0.1);
+        .sort-option:hover { background: #F8FAFC; }
+        .sort-option.selected { background: #FFFBEB; color: #78350F; font-weight: 600; }
+
+        .sort-check {
+            width: 16px;
+            height: 16px;
+            border-radius: 999px;
+            background: #F59E0B;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
         }
 
-        .search-box button {
-            padding: 12px 20px;
+        /* ---------- Book list ---------- */
+
+        .list-wrap {
+            padding: 12px 16px 40px;
         }
 
-        .book-grid {
-            width: 100%;
+        .book-group {
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+            border: 1px solid rgba(203, 213, 225, 0.6);
         }
 
         .book-card {
-            min-height: 114px;
-            padding: 22px 32px 20px 34px;
-            display: grid;
-            grid-template-columns: 18px minmax(0, 1fr) auto;
-            column-gap: 20px;
+            display: flex;
             align-items: center;
-            border: 0;
-            border-bottom: 1px solid #e1e8e5;
-            border-left: 5px solid transparent;
+            gap: 12px;
+            width: 100%;
+            padding: 10px 16px;
+            text-align: left;
+            border: none;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
             cursor: pointer;
-            transition: all 0.2s;
-            background: white;
+            font-family: inherit;
+            transition: filter .1s;
         }
 
-        .book-card.has-availability {
-            background: #effcf3;
-            border-left-color: #42d77c;
-        }
+        .book-card:last-child { border-bottom: none; }
+        .book-card:active { filter: brightness(0.95); }
 
-        .book-card:hover {
-            background: #f7f9f8;
-        }
+        .book-card.available { background: #E6F9EE; }
+        .book-card.waitlist { background: #FFF7DC; }
+        .book-card.unavailable { background: #FFFFFF; }
 
-        .availability-indicator {
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-        }
-
-        .availability-indicator.available { background: #18a957; }
-        .availability-indicator.waitlist { background: #f3a329; }
-        .availability-indicator.unavailable { background: #c8ced7; }
-
-        .book-info { min-width: 0; }
+        .book-info { flex: 1; min-width: 0; }
 
         .book-title {
-            display: block;
-            font-size: 27px;
-            line-height: 1.15;
-            font-weight: 700;
-            color: #152033;
+            font-size: 14px;
+            font-weight: 600;
+            color: #0F172A;
+            line-height: 1.3;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
 
         .book-author {
-            display: block;
-            margin-top: 7px;
-            font-size: 23px;
-            line-height: 1.1;
-            color: #6d7a8e;
+            font-size: 12px;
+            color: #64748B;
+            line-height: 1.3;
+            margin-top: 2px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -198,535 +384,1282 @@
         .book-formats {
             display: flex;
             align-items: center;
-            gap: 14px;
-            padding-left: 12px;
+            gap: 6px;
+            flex-shrink: 0;
         }
 
-        .format-icon {
-            width: 27px;
-            height: 27px;
-            color: #d5dbe3;
-        }
-
-        .format-icon.available { color: #08a74d; }
-        .format-icon.waitlist { color: #f3a329; }
-
-        .filter-bar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 16px;
-            padding: 0 32px 20px;
-            border-bottom: 1px solid #e4e8ed;
-            margin-bottom: 0;
-        }
-
-        .filter-left { display: flex; gap: 8px; }
-
-        .filter-pill,
-        .available-pill {
-            height: 52px;
-            border-radius: 28px;
-            border: 1px solid #dce1e8;
-            background: white;
-            color: #69768a;
-            font-size: 21px;
-            font-weight: 500;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .filter-pill { padding: 0 22px; }
-        .available-pill { padding: 0 18px; }
-
-        .filter-pill.active {
-            background: #111b2c;
-            border-color: #111b2c;
-            color: white;
-        }
-
-        .filter-pill svg {
-            width: 22px;
-            height: 22px;
-        }
-
-        .available-pill.active {
-            background: #111b2c !important;
-            border-color: #111b2c !important;
-            color: white !important;
-        }
-
-        .available-circle {
-            width: 21px;
-            height: 21px;
-            border: 3px solid #aeb8c6;
-            border-radius: 50%;
-        }
-
-        .available-pill.active .available-circle {
-            border-color: white;
-        }
-
-        .available-count {
-            background: #c9f6d8;
-            color: #159447;
-            min-width: 38px;
-            height: 34px;
-            padding: 0 9px;
-            border-radius: 18px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-        }
-
-        @media (max-width: 600px) {
-            .filter-bar {
-                padding: 0 20px 16px;
-                overflow-x: auto;
-            }
-
-            .filter-pill,
-            .available-pill {
-                height: 46px;
-                font-size: 18px;
-                white-space: nowrap;
-            }
-
-            .filter-pill { padding: 0 17px; }
-            .available-pill { padding: 0 16px; }
-            .book-card {
-                padding: 19px 18px 18px 20px;
-                grid-template-columns: 14px minmax(0, 1fr) auto;
-                column-gap: 16px;
-            }
-            .book-title { font-size: 21px; }
-            .book-author { font-size: 18px; margin-top: 6px; }
-            .book-formats { gap: 9px; padding-left: 5px; }
-            .format-icon { width: 23px; height: 23px; }
-        }
-
-        .search-results {
-            background: white;
-            border: 1px solid #dce1e8;
-            border-radius: 8px;
-            max-height: 400px;
-            overflow-y: auto;
-            position: absolute;
-            top: calc(100% + 4px);
-            left: 0;
-            width: 100%;
-            box-sizing: border-box;
-            z-index: 100;
-        }
-
-        .search-result-item {
-            padding: 12px 16px;
-            border-bottom: 1px solid #e4e8ed;
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .search-result-item:last-child {
-            border-bottom: none;
-        }
-
-        .search-result-item:hover {
-            background: #f6f8fa;
-        }
-
-        .search-result-text {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .search-result-title {
-            font-weight: 600;
-            font-size: 14px;
-            margin-bottom: 2px;
-        }
-
-        .search-result-author {
-            font-size: 12px;
-            color: #7d8999;
-        }
-
-        .search-result-add {
-            background: #111b2c;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            padding: 6px 12px;
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            white-space: nowrap;
-            margin-left: 12px;
-        }
-
-        .search-result-add:hover {
-            background: #1a2a3f;
-        }
+        .format-icon.off { color: #CBD5E1; }
+        .format-icon.on { color: #16A34A; }
 
         .empty-state {
+            padding: 64px 32px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
             text-align: center;
-            padding: 60px 32px;
-            color: #7d8999;
         }
 
-        .empty-state-icon {
-            font-size: 48px;
-            margin-bottom: 16px;
-        }
+        .empty-state .msg { font-size: 15px; font-weight: 600; color: #94A3B8; }
 
-        .empty-state-title {
-            font-size: 18px;
+        .clear-filters {
+            font-size: 13px;
             font-weight: 600;
-            color: #142033;
+            color: #B45309;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        /* ---------- Legend ---------- */
+
+        .legend {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px 4px 0;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: #94A3B8;
+        }
+
+        .legend-swatch {
+            width: 10px;
+            height: 10px;
+            border-radius: 3px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .legend-swatch.available { background: #E6F9EE; }
+        .legend-swatch.waitlist { background: #FFF7DC; }
+        .legend-swatch.unavailable { background: #FFFFFF; }
+
+        /* ---------- Bottom sheets ---------- */
+
+        .sheet-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            align-items: center;
+            background: rgba(15, 23, 42, 0);
+            transition: background-color .3s;
+            pointer-events: none;
+        }
+
+        .sheet-overlay.show {
+            background: rgba(15, 23, 42, 0.5);
+            pointer-events: auto;
+        }
+
+        .sheet {
+            position: relative;
+            background: #fff;
+            border-radius: 24px 24px 0 0;
+            box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.15);
+            width: 100%;
+            max-width: 480px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            transform: translateY(100%);
+            transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+        }
+
+        .sheet-overlay.show .sheet { transform: translateY(0); }
+
+        .sheet-grabber {
+            width: 40px;
+            height: 4px;
+            border-radius: 999px;
+            background: #E2E8F0;
+            margin: 12px auto 4px;
+            flex-shrink: 0;
+        }
+
+        .sheet-close {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            width: 32px;
+            height: 32px;
+            border-radius: 999px;
+            background: #F1F5F9;
+            color: #64748B;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 2;
+        }
+
+        .sheet-body {
+            overflow-y: auto;
+            flex: 1;
+            scrollbar-width: none;
+        }
+        .sheet-body::-webkit-scrollbar { display: none; }
+
+        /* ---------- Detail sheet ---------- */
+
+        .detail-header {
+            padding: 8px 20px 16px;
+            border-bottom: 1px solid #F1F5F9;
+        }
+
+        .detail-header.available { background: #E6F9EE; }
+        .detail-header.waitlist { background: #FFF7DC; }
+        .detail-header.unavailable { background: #F8FAFC; }
+
+        .detail-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #0F172A;
+            line-height: 1.3;
+            padding-right: 32px;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        .detail-author {
+            font-size: 13px;
+            color: #64748B;
+            margin-top: 4px;
+        }
+
+        .synopsis-row {
+            border-bottom: 1px solid #F1F5F9;
+        }
+
+        .synopsis-toggle {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .synopsis-label {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: #94A3B8;
+        }
+
+        .synopsis-body {
+            padding: 0 20px 16px;
+            font-size: 14px;
+            color: #475569;
+            line-height: 1.6;
+        }
+
+        .borrow-section {
+            padding: 16px 20px 20px;
+        }
+
+        .borrow-label {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: #94A3B8;
+            margin-bottom: 12px;
+        }
+
+        .borrow-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: 16px;
+            border: 1px solid #E2E8F0;
             margin-bottom: 8px;
         }
 
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(10, 20, 35, 0.45);
-            z-index: 1000;
+        .borrow-item.available { border-color: #A7F3D0; background: #E6F9EE; }
+        .borrow-item.waitlist { border-color: #FDE68A; background: #FFF7DC; }
+        .borrow-item.unavailable { border-color: #E2E8F0; background: #F8FAFC; }
+
+        .borrow-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .borrow-item.available .borrow-icon { background: #C6F6D5; color: #15803D; }
+        .borrow-item.waitlist .borrow-icon { background: #FEF3C7; color: #D97706; }
+        .borrow-item.unavailable .borrow-icon { background: #F1F5F9; color: #94A3B8; }
+
+        .borrow-info { flex: 1; min-width: 0; }
+
+        .borrow-format {
+            font-size: 14px;
+            font-weight: 600;
+            color: #0F172A;
+        }
+
+        .borrow-sub {
+            font-size: 12px;
+            color: #64748B;
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .borrow-sub .wait-tag { color: #D97706; }
+
+        .borrow-cta {
+            flex-shrink: 0;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .borrow-cta button {
+            padding: 8px 16px;
+            border-radius: 12px;
+            border: none;
+            background: #16A34A;
+            color: #fff;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .borrow-cta .status-text.available { color: #16A34A; }
+        .borrow-cta .status-text.waitlist { color: #D97706; }
+        .borrow-cta .status-text.unavailable { color: #64748B; }
+
+        .detail-actions {
+            padding: 0 20px 32px;
+        }
+
+        .remove-btn {
+            width: 100%;
+            padding: 12px;
+            border-radius: 16px;
+            border: 1px solid #FECACA;
+            background: #FFF1F2;
+            color: #F43F5E;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            transition: background .15s;
+        }
+
+        .remove-btn:hover { background: #FFE4E6; }
+
+        .confirm-remove {
+            border: 1px solid #FECACA;
+            background: #FFF1F2;
+            border-radius: 16px;
+            overflow: hidden;
+        }
+
+        .confirm-remove p {
+            font-size: 13px;
+            color: #BE123C;
+            text-align: center;
+            padding: 16px 16px 12px;
+            font-weight: 500;
+            line-height: 1.4;
+        }
+
+        .confirm-remove .actions {
+            display: flex;
+            border-top: 1px solid #FECACA;
+        }
+
+        .confirm-remove .actions button {
+            flex: 1;
+            padding: 12px;
+            background: none;
+            border: none;
+            font-size: 14px;
+            font-family: inherit;
+            cursor: pointer;
+        }
+
+        .confirm-remove .actions button.cancel {
+            color: #64748B;
+            font-weight: 600;
+            border-right: 1px solid #FECACA;
+        }
+
+        .confirm-remove .actions button.remove {
+            color: #E11D48;
+            font-weight: 700;
+        }
+
+        /* ---------- Import sheet ---------- */
+
+        .import-pick, .import-paste {
+            padding: 8px 20px 20px;
+        }
+
+        .sheet-heading {
+            font-size: 18px;
+            font-weight: 700;
+            color: #0F172A;
+            margin-bottom: 4px;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        .sheet-sub {
+            font-size: 13px;
+            color: #94A3B8;
+            margin-bottom: 20px;
+        }
+
+        .import-option {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            width: 100%;
+            padding: 16px;
+            border-radius: 16px;
+            border: 1px solid #E2E8F0;
+            text-align: left;
+            cursor: pointer;
+            font-family: inherit;
+            margin-bottom: 12px;
+            transition: border-color .15s, transform .05s;
+        }
+
+        .import-option:hover { border-color: #CBD5E1; }
+        .import-option:active { transform: scale(0.99); }
+
+        .import-option.goodreads { background: #E8F5E9; }
+        .import-option.storygraph { background: #EDE7F6; }
+        .import-option.file { background: #E3F2FD; }
+
+        .import-option-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            background: #fff;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #64748B;
+            flex-shrink: 0;
+        }
+
+        .import-option-label { font-size: 15px; font-weight: 600; color: #0F172A; }
+        .import-option-sub { font-size: 12px; color: #64748B; margin-top: 2px; line-height: 1.4; }
+
+        .howto-box {
+            padding: 12px;
+            border-radius: 12px;
+            background: #FFFBEB;
+            border: 1px solid #FDE68A;
+            margin-bottom: 16px;
+        }
+
+        .howto-box strong { font-size: 12px; color: #92400E; font-weight: 600; }
+        .howto-box p { font-size: 12px; color: #B45309; margin-top: 4px; line-height: 1.5; }
+
+        .paste-input {
+            width: 100%;
+            height: 144px;
+            padding: 12px 16px;
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-radius: 16px;
+            font-size: 13px;
+            color: #334155;
+            outline: none;
+            resize: none;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            transition: box-shadow .15s;
+        }
+
+        .paste-input:focus { box-shadow: 0 0 0 2px rgba(245, 194, 97, 0.6); }
+
+        .sheet-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .sheet-actions button {
+            flex: 1;
+            padding: 12px;
+            border-radius: 16px;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            border: 1px solid #E2E8F0;
+            background: #fff;
+            color: #64748B;
+        }
+
+        .sheet-actions button.primary {
+            border: none;
+            color: #fff;
+            font-weight: 700;
+            background: #16A34A;
+        }
+
+        .sheet-actions button.primary:disabled { background: #CBD5E1; }
+
+        .import-success {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px 48px;
+            gap: 16px;
+        }
+
+        .success-check {
+            width: 64px;
+            height: 64px;
+            border-radius: 999px;
+            background: #DCFCE7;
+            display: flex;
             align-items: center;
             justify-content: center;
         }
 
-        .modal-overlay.show {
-            display: flex;
-        }
+        .success-title { font-size: 17px; font-weight: 700; color: #0F172A; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .success-sub { font-size: 13px; color: #64748B; margin-top: 4px; text-align: center; }
 
-        .modal {
-            background: white;
-            border-radius: 18px;
-            padding: 28px;
+        .success-done {
             width: 100%;
-            max-width: 560px;
-            max-height: 82vh;
-            overflow-y: auto;
-            position: relative;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
-        }
-
-        .modal-close {
-            position: absolute;
-            top: 14px;
-            right: 16px;
-            width: 36px;
-            height: 36px;
-            border: 0;
-            border-radius: 50%;
-            background: #f1f3f6;
-            font-size: 24px;
-            cursor: pointer;
-            color: #9aa5b5;
-        }
-
-        .book-detail {
-            margin-bottom: 24px;
-        }
-
-        .book-detail-header {
-            display: flex;
-            align-items: flex-start;
-            gap: 10px;
-            padding-right: 44px;
-        }
-
-        .book-detail-info h2 {
-            margin: 0 0 4px;
-            font-size: 27px;
-            line-height: 1.15;
-            color: #152033;
-        }
-
-        .book-detail-author {
-            color: #7d8999;
-            font-size: 18px;
-            margin: 0 0 22px 24px;
-        }
-
-        .availability-section {
-            margin-top: 22px;
-            padding-top: 18px;
-            border-top: 1px solid #e4e8ed;
-        }
-
-        .availability-section h3 {
-            margin: 0 0 12px;
-            font-size: 13px;
-            font-weight: 700;
-            letter-spacing: 0.06em;
-            text-transform: uppercase;
-            color: #8793a6;
-        }
-
-        .availability-item {
-            padding: 12px 16px;
-            border: 1px solid #e4e8ed;
-            border-radius: 16px;
-            margin-bottom: 12px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .availability-item.available {
-            background: #effcf3;
-            border-color: #bdeecb;
-        }
-
-        .availability-item.waitlist {
-            background: #fff7e9;
-            border-color: #f6ddab;
-        }
-
-        .availability-info {
-            flex: 1;
-        }
-
-        .availability-provider {
-            font-weight: 700;
-            font-size: 17px;
-            color: #152033;
-        }
-
-        .availability-format {
-            font-size: 14px;
-            color: #6d7a8e;
-            margin-top: 2px;
-        }
-
-        .availability-status {
-            font-size: 14px;
-            font-weight: 600;
-            padding: 9px 18px;
-            border-radius: 20px;
-            white-space: nowrap;
-        }
-
-        .availability-status.available {
-            background: #18a957;
-            color: white;
-        }
-
-        .availability-status.waitlist {
-            background: #f3a329;
-            color: white;
-        }
-
-        .availability-status.unavailable {
-            background: #d1d5db;
-            color: #374151;
-        }
-
-        .modal-actions {
-            display: flex;
-            gap: 12px;
-            margin-top: 24px;
-        }
-
-        .modal-actions button {
-            flex: 1;
             padding: 12px;
+            border-radius: 16px;
+            border: none;
+            background: #1C1917;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            font-family: inherit;
         }
 
-        .spinner {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid #dce1e8;
-            border-top-color: #111b2c;
-            border-radius: 50%;
-            animation: spin 0.6s linear infinite;
+        .file-error {
+            margin-top: 12px;
+            font-size: 13px;
+            color: #E11D48;
+            text-align: center;
         }
 
-        @keyframes spin {
-            to { transform: rotate(360deg); }
+        /* ---------- Libraries sheet ---------- */
+
+        .libraries-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 20px 16px;
+            border-bottom: 1px solid #F1F5F9;
         }
+
+        .libraries-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 17px;
+            font-weight: 700;
+            color: #0F172A;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        .libraries-title svg { color: #D97706; }
+
+        .lib-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid #F8FAFC;
+        }
+
+        .lib-name { font-size: 15px; font-weight: 500; color: #0F172A; }
+        .lib-sub { font-size: 13px; color: #94A3B8; margin-top: 2px; }
+
+        .switch {
+            position: relative;
+            flex-shrink: 0;
+            width: 51px;
+            height: 31px;
+            border-radius: 999px;
+            background: #E2E8F0;
+            border: none;
+            cursor: pointer;
+            transition: background .2s;
+            padding: 0;
+        }
+
+        .switch.on { background: #22C55E; }
+
+        .switch-knob {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 27px;
+            height: 27px;
+            border-radius: 999px;
+            background: #fff;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+            transition: left .2s;
+        }
+
+        .switch.on .switch-knob { left: 22px; }
+
+        .add-library {
+            padding: 16px 20px;
+            background: none;
+            border: none;
+            font-size: 15px;
+            font-weight: 600;
+            color: #B45309;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .libraries-back {
+            background: none;
+            border: none;
+            font-size: 18px;
+            color: #64748B;
+            cursor: pointer;
+            padding: 4px 10px;
+            font-family: inherit;
+        }
+
+        .lib-add-note {
+            padding: 14px 20px;
+            font-size: 13px;
+            color: #64748B;
+        }
+
+        .lib-available { cursor: pointer; }
+        .lib-available:hover { background: #F8FAFC; }
+
+        .lib-add-arrow {
+            color: #D97706;
+            font-weight: 600;
+            font-size: 20px;
+        }
+
+        .status-toast {
+            position: fixed;
+            left: 50%;
+            bottom: 24px;
+            transform: translateX(-50%);
+            z-index: 80;
+            background: #1C1917;
+            color: #fff;
+            font-size: 13px;
+            font-weight: 500;
+            padding: 10px 18px;
+            border-radius: 999px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+            opacity: 0;
+            transition: opacity .2s, transform .2s;
+            pointer-events: none;
+            max-width: 90%;
+            text-align: center;
+        }
+
+        .status-toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+        .status-toast.error { background: #BE123C; }
+        .status-toast.warning { background: #B45309; }
     </style>
 </head>
 <body>
     <div id="app">
         <header class="app-header">
-            <h1 class="app-title">📚 My Books</h1>
-            <div class="header-actions">
-                <button class="btn btn-secondary btn-icon" id="settings-btn" title="Library settings">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="3"/>
-                        <path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m6.08 0l4.24-4.24M1 12h6m6 0h6m-1.78 7.78l-4.24-4.24m-6.08 0l-4.24 4.24"/>
-                    </svg>
-                </button>
-                <button class="btn btn-secondary" id="refresh-availability-btn">
-                    Refresh availability
-                </button>
-                <button class="btn btn-secondary" id="upload-tbr-btn">
-                    Upload TBR list
-                </button>
-            </div>
-        </header>
-
-        <div id="status"></div>
-
-        <div class="content">
-            <div class="search-box">
-                <input 
-                    type="text" 
-                    id="search-input" 
-                    placeholder="Search for a book by title or author…"
-                    autocomplete="off"
-                >
-                <div id="search-results" class="search-results" style="display: none;"></div>
-            </div>
-
-            <div class="filter-bar">
-                <div class="filter-left">
-                    <button class="filter-pill active" data-format="all" type="button">All</button>
-                    <button class="filter-pill" data-format="ebook" type="button">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
-                            <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5v-15z"/>
-                            <path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20"/>
-                        </svg>
-                        eBook
+            <div class="header-row">
+                <h1 class="app-title h-serif">MyNextRead</h1>
+                <div class="header-actions">
+                    <button class="pill-btn" id="import-btn" title="Import reading list">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        Import
                     </button>
-                    <button class="filter-pill" data-format="audio" type="button">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
-                            <path d="M4 13a8 8 0 0 1 16 0"/>
-                            <path d="M4 13v5a2 2 0 0 0 2 2h1v-7H4z"/>
-                            <path d="M20 13v5a2 2 0 0 1-2 2h-1v-7h3z"/>
-                        </svg>
-                        Audio
+                    <button class="pill-btn" id="refresh-btn" title="Refresh availability">
+                        <svg id="refresh-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+                        <span id="refresh-label">Refresh</span>
+                    </button>
+                    <button class="libraries-btn" id="libraries-btn" title="Libraries">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/></svg>
+                        <span>Libraries</span>
                     </button>
                 </div>
+            </div>
+            <div class="search-wrap">
+                <div class="search-box">
+                    <svg class="search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                    <input type="text" id="search-input" placeholder="Search books or authors…" autocomplete="off">
+                    <button class="clear-btn" id="clear-btn" style="display:none;">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="filter-bar">
+                <button class="filter-pill active" data-format="all" type="button">All</button>
+                <button class="filter-pill" data-format="ebook" type="button">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+                    eBook
+                </button>
+                <button class="filter-pill" data-format="audio" type="button">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/></svg>
+                    Audio
+                </button>
+                <div class="filter-divider"></div>
                 <button class="available-pill" id="available-filter" type="button">
-                    <span class="available-circle"></span>
+                    <span class="dot" id="available-dot"></span>
                     Available
                     <span class="available-count" id="available-count">0</span>
                 </button>
+                <div class="sort-wrap">
+                    <button class="sort-btn" id="sort-btn" type="button">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>
+                        <span id="sort-label">Availability</span>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" id="sort-caret"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                    <div class="sort-menu" id="sort-menu" style="display:none;"></div>
+                </div>
             </div>
+        </header>
 
-            <div id="books-container"></div>
-        </div>
-    </div>
-
-    <div id="book-modal" class="modal-overlay">
-        <div class="modal">
-            <button class="modal-close" id="modal-close">&times;</button>
-            <div id="modal-content"></div>
-        </div>
-    </div>
-
-    <div id="settings-modal" class="modal-overlay">
-        <div class="modal">
-            <button class="modal-close" id="settings-close">&times;</button>
-            <h2 style="margin-top: 0;">Library Settings</h2>
-            <p style="font-size: 14px; color: #7d8999;">Select which libraries to search when checking availability.</p>
-            <div id="libraries-list" style="margin: 20px 0;"></div>
-            <button class="btn btn-primary" style="width: 100%;" id="settings-save">Done</button>
-        </div>
-    </div>
-
-    <div id="upload-modal" class="modal-overlay">
-        <div class="modal">
-            <button class="modal-close" id="upload-close">&times;</button>
-            <h2 style="margin-top: 0;">Upload TBR list</h2>
-            <p style="font-size: 14px; color: #7d8999; line-height: 1.5;">
-                Export your to-read shelf from Goodreads or StoryGraph, then upload the CSV here.
-            </p>
-            <div style="font-size: 14px; line-height: 1.6; margin: 16px 0;">
-                <strong>Goodreads</strong><br>
-                My Books → Import and export → Export Library, then download the CSV.<br><br>
-                <strong>StoryGraph</strong><br>
-                Menu → Manage Account → Export Library, then download your shelf CSV.
+        <div class="list-wrap">
+            <div id="books-container">
+                <div class="empty-state">
+                    <p class="msg">Loading…</p>
+                </div>
             </div>
-            <input type="file" id="csv-file-input" accept=".csv,text/csv" style="display: none;">
-            <button class="btn btn-primary" id="select-csv-btn">Upload CSV</button>
-            <div id="selected-csv-name" style="font-size: 13px; color: #7d8999; margin-top: 12px;"></div>
+            <div class="legend">
+                <span class="legend-item"><span class="legend-swatch available"></span>Available</span>
+                <span class="legend-item"><span class="legend-swatch waitlist"></span>Waitlist</span>
+                <span class="legend-item"><span class="legend-swatch unavailable"></span>Unavailable</span>
+            </div>
         </div>
     </div>
+
+    <!-- Detail sheet -->
+    <div id="book-sheet" class="sheet-overlay" aria-hidden="true">
+        <div class="sheet">
+            <div class="sheet-grabber"></div>
+            <button class="sheet-close" id="book-sheet-close">&times;</button>
+            <div class="sheet-body" id="book-sheet-body"></div>
+        </div>
+    </div>
+
+    <!-- Import sheet -->
+    <div id="import-sheet" class="sheet-overlay" aria-hidden="true">
+        <div class="sheet">
+            <div class="sheet-grabber"></div>
+            <button class="sheet-close" id="import-sheet-close">&times;</button>
+            <div class="sheet-body" id="import-sheet-body"></div>
+        </div>
+    </div>
+
+    <!-- Libraries sheet -->
+    <div id="libraries-sheet" class="sheet-overlay" aria-hidden="true">
+        <div class="sheet">
+            <div class="sheet-grabber"></div>
+            <button class="sheet-close" id="libraries-sheet-close">&times;</button>
+            <div class="sheet-body" id="libraries-sheet-body"></div>
+        </div>
+    </div>
+
+    <div id="toast" class="status-toast"></div>
+
+    <input type="file" id="csv-file-input" accept=".csv,text/csv" style="display:none;">
 
     <script>
         const API_BASE = "/api";
         let allBooks = [];
-        let searchTimeout = null;
-        let searchGeneration = 0;
         let libraryConfigs = [];
         let activeFormat = "all";
         let availableOnly = false;
+        let sortKey = "status";
+        let searchQuery = "";
+        let selectedBook = null;
+        let importStep = "pick";
+        let importSource = null;
+        let importFile = null;
 
-        function syncAvailableFilter() {
-            const button = document.getElementById("available-filter");
-            button.classList.toggle("active", availableOnly);
-            button.style.backgroundColor = availableOnly ? "#111b2c" : "white";
-            button.style.borderColor = availableOnly ? "#111b2c" : "#dce1e8";
-            button.style.color = availableOnly ? "white" : "#69768a";
-            button.querySelector(".available-circle").style.borderColor = availableOnly ? "white" : "#aeb8c6";
+        const STATUS_ORDER = { available: 0, waitlist: 1, unavailable: 2 };
+        const SORT_OPTIONS = [
+            { id: "status", label: "Availability" },
+            { id: "title-asc", label: "Title A–Z" },
+            { id: "author-asc", label: "Author A–Z" },
+            { id: "date-desc", label: "Newest" },
+            { id: "date-asc", label: "Oldest" },
+        ];
+
+        // ---------- helpers ----------
+
+        function fmt(v) { return (v || "").toLowerCase(); }
+        function isEbook(f) { return fmt(f).includes("ebook"); }
+        function isAudio(f) { return fmt(f).includes("audio"); }
+
+        function rowsFor(ub, format) {
+            const rows = ub.availability || [];
+            if (format === "all") return rows;
+            if (format === "ebook") return rows.filter(r => fmt(r.format) === "ebook");
+            return rows.filter(r => fmt(r.format) === "audiobook" || fmt(r.format) === "audio");
         }
 
-        syncAvailableFilter();
+        function statusOf(ub, format) {
+            const rows = rowsFor(ub, format);
+            if (rows.some(r => r.available)) return "available";
+            if (rows.some(r => r.wait_text)) return "waitlist";
+            return "unavailable";
+        }
 
-        // Initialize
-        loadBooks();
-        loadLibraries();
+        function waitEstimate(row) {
+            if (row.available) return null;
+            const weeks = row.wait_weeks ?? (row.holds != null ? Math.max(1, Math.round(row.holds * 1.5)) : null);
+            return weeks != null ? `~${weeks} wk${weeks === 1 ? "" : "s"}` : null;
+        }
 
-        document.getElementById("settings-btn").addEventListener("click", openSettings);
-        document.getElementById("refresh-availability-btn").addEventListener("click", checkAllAvailability);
-        document.getElementById("upload-tbr-btn").addEventListener("click", openUpload);
-        document.getElementById("settings-close").addEventListener("click", closeSettings);
-        document.getElementById("settings-save").addEventListener("click", closeSettings);
-        document.getElementById("upload-close").addEventListener("click", closeUpload);
-        document.getElementById("select-csv-btn").addEventListener("click", () => {
-            document.getElementById("csv-file-input").click();
-        });
-        document.getElementById("csv-file-input").addEventListener("change", importCsv);
+        function libraryLabel(key) {
+            const found = libraryConfigs.find(l => l.library_key === key);
+            return found ? found.label : key;
+        }
 
-        document.getElementById("search-input").addEventListener("input", handleSearch);
-        document.getElementById("modal-close").addEventListener("click", closeModal);
-        document.querySelectorAll(".filter-pill").forEach(button => {
-            button.addEventListener("click", () => {
-                activeFormat = button.dataset.format;
-                document.querySelectorAll(".filter-pill").forEach(item => item.classList.remove("active"));
-                button.classList.add("active");
+        function providerLabel(row) {
+            const provider = row.provider || "";
+            return `${provider} · ${libraryLabel(row.library)}`;
+        }
+
+        let toastTimer = null;
+        function showToast(message, type = "success") {
+            const el = document.getElementById("toast");
+            el.textContent = message;
+            el.className = `status-toast show ${type}`;
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => el.classList.remove("show"), 3000);
+        }
+
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"']/g, c => ({
+                "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+            }[c]));
+        }
+
+        // ---------- load data ----------
+
+        async function loadBooks() {
+            try {
+                const resp = await fetch(`${API_BASE}/books`);
+                allBooks = await resp.json();
                 renderBooks();
-            });
-        });
-        document.getElementById("available-filter").addEventListener("click", () => {
-            availableOnly = !availableOnly;
-            syncAvailableFilter();
-            renderBooks();
-        });
+            } catch (e) {
+                showToast("Error loading books", "error");
+            }
+        }
 
         async function loadLibraries() {
             try {
-                const response = await fetch(`${API_BASE}/libraries`);
-                libraryConfigs = await response.json();
-                renderLibraryCheckboxes();
+                const resp = await fetch(`${API_BASE}/libraries`);
+                libraryConfigs = await resp.json();
             } catch (e) {
                 console.error("Error loading libraries:", e);
             }
         }
 
-        function renderLibraryCheckboxes() {
-            const container = document.getElementById("libraries-list");
-            const html = libraryConfigs.map(lib => `
-                <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; cursor: pointer;">
-                    <input type="checkbox" ${lib.enabled ? "checked" : ""} 
-                           onchange="updateLibrary(${lib.id}, this.checked)">
-                    <span>${lib.label}</span>
-                </label>
+        // ---------- list rendering ----------
+
+        function renderBooks() {
+            const container = document.getElementById("books-container");
+            const rows = filteredBooks();
+
+            document.getElementById("available-count").textContent = availableCount();
+
+            if (rows.length === 0) {
+                const hasAny = allBooks.length > 0;
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <p class="msg">${hasAny ? "No books match" : "No books yet"}</p>
+                        ${hasAny ? `<button class="clear-filters" id="clear-filters">Clear filters</button>` : ""}
+                    </div>
+                `;
+                if (hasAny) {
+                    document.getElementById("clear-filters").addEventListener("click", () => {
+                        searchQuery = "";
+                        document.getElementById("search-input").value = "";
+                        document.getElementById("clear-btn").style.display = "none";
+                        availableOnly = false;
+                        activeFormat = "all";
+                        sortKey = "status";
+                        document.querySelectorAll(".filter-pill").forEach(b => b.classList.toggle("active", b.dataset.format === "all"));
+                        renderBooks();
+                    });
+                }
+                return;
+            }
+
+            const items = rows.map((ub, idx) => {
+                const st = statusOf(ub, activeFormat);
+                const nr = rowsFor(ub, activeFormat);
+                const hasEbook = nr.some(r => isEbook(r.format));
+                const hasAudio = nr.some(r => isAudio(r.format));
+                const ebookAvail = nr.some(r => isEbook(r.format) && r.available);
+                const audioAvail = nr.some(r => isAudio(r.format) && r.available);
+                const isLast = idx === rows.length - 1;
+                return `
+                    <div class="book-card ${st} ${isLast ? "" : ""}" data-id="${ub.id}">
+                        <div class="book-info">
+                            <p class="book-title">${escapeHtml(ub.book?.title || "Unknown")}</p>
+                            <p class="book-author">${escapeHtml(ub.book?.author || "")}</p>
+                        </div>
+                        ${(hasEbook || hasAudio) ? `
+                        <div class="book-formats">
+                            ${hasEbook ? `<svg class="format-icon ${ebookAvail ? "on" : "off"}" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>` : ""}
+                            ${hasAudio ? `<svg class="format-icon ${audioAvail ? "on" : "off"}" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/></svg>` : ""}
+                        </div>` : ""}
+                    </div>
+                `;
+            }).join("");
+
+            container.innerHTML = `<div class="book-group">${items}</div>`;
+
+            container.querySelectorAll(".book-card").forEach(card => {
+                card.addEventListener("click", () => openBookSheet(Number(card.dataset.id)));
+            });
+        }
+
+        function filteredBooks() {
+            const q = searchQuery.toLowerCase();
+            const filtered = allBooks.filter(ub => {
+                const title = (ub.book?.title || "").toLowerCase();
+                const author = (ub.book?.author || "").toLowerCase();
+                if (q && !title.includes(q) && !author.includes(q)) return false;
+
+                const rows = rowsFor(ub, activeFormat);
+                if (rows.length === 0) return false;
+                if (availableOnly && !rows.some(r => r.available)) return false;
+                return true;
+            });
+
+            filtered.sort((a, b) => {
+                switch (sortKey) {
+                    case "title-asc": return (a.book?.title || "").localeCompare(b.book?.title || "");
+                    case "author-asc": return (a.book?.author || "").localeCompare(b.book?.author || "");
+                    case "date-desc": return new Date(b.added_at) - new Date(a.added_at);
+                    case "date-asc": return new Date(a.added_at) - new Date(b.added_at);
+                    default: return (
+                        STATUS_ORDER[statusOf(a, activeFormat)] - STATUS_ORDER[statusOf(b, activeFormat)]
+                    );
+                }
+            });
+
+            return filtered;
+        }
+
+        function availableCount() {
+            return allBooks.filter(ub => rowsFor(ub, activeFormat).some(r => r.available)).length;
+        }
+
+        // ---------- sort menu ----------
+
+        function renderSortMenu() {
+            const menu = document.getElementById("sort-menu");
+            menu.innerHTML = SORT_OPTIONS.map(opt => `
+                <button class="sort-option ${opt.id === sortKey ? "selected" : ""}" data-sort="${opt.id}">
+                    ${opt.label}
+                    ${opt.id === sortKey ? `
+                        <span class="sort-check"><svg width="8" height="6" viewBox="0 0 8 6" fill="none"><path d="M1 3L3 5L7 1" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                    ` : ""}
+                </button>
             `).join("");
-            container.innerHTML = html;
+            menu.querySelectorAll(".sort-option").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    sortKey = btn.dataset.sort;
+                    document.getElementById("sort-label").textContent =
+                        SORT_OPTIONS.find(o => o.id === sortKey).label;
+                    menu.style.display = "none";
+                    renderBooks();
+                });
+            });
+        }
+
+        // ---------- bottom sheet plumbing ----------
+
+        function openSheet(el) {
+            el.classList.add("show");
+            el.setAttribute("aria-hidden", "false");
+        }
+
+        function closeSheet(el) {
+            el.classList.remove("show");
+            el.setAttribute("aria-hidden", "true");
+        }
+
+        // ---------- book detail sheet ----------
+
+        function openBookSheet(userBookId) {
+            const ub = allBooks.find(b => b.id === userBookId);
+            if (!ub) return;
+            selectedBook = ub;
+
+            const st = statusOf(ub, "all");
+            const rows = [...(ub.availability || [])].sort(
+                (a, b) => STATUS_ORDER[availStatus(a)] - STATUS_ORDER[availStatus(b)]
+            );
+
+            const borrowHtml = rows.length === 0
+                ? `<div style="padding:12px;color:#94A3B8;text-align:center;font-size:13px;">Availability has not been checked yet.</div>`
+                : rows.map(row => {
+                    const rs = availStatus(row);
+                    const isE = isEbook(row.format);
+                    const est = waitEstimate(row);
+                    return `
+                        <div class="borrow-item ${rs}">
+                            <div class="borrow-icon">
+                                ${isE
+                                    ? `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>`
+                                    : `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/></svg>`}
+                            </div>
+                            <div class="borrow-info">
+                                <p class="borrow-format">${escapeHtml(row.format || "Unknown")}</p>
+                                <p class="borrow-sub">
+                                    ${escapeHtml(providerLabel(row))}
+                                    ${row.holds != null ? ` · ${row.holds} hold${row.holds === 1 ? "" : "s"}` : ""}
+                                    ${est ? `<span class="wait-tag"> · ${est}</span>` : ""}
+                                </p>
+                            </div>
+                            <div class="borrow-cta">
+                                ${rs === "available"
+                                    ? (row.url
+                                        ? `<button data-borrow="${escapeHtml(row.url)}">Borrow</button>`
+                                        : `<span class="status-text available">Available</span>`)
+                                    : `<span class="status-text ${rs}">${rs === "waitlist" ? "Waitlist" : "Unavailable"}</span>`}
+                            </div>
+                        </div>
+                    `;
+                }).join("");
+
+            const synopsis = ub.book?.synopsis || "";
+
+            document.getElementById("book-sheet-body").innerHTML = `
+                <div class="detail-header ${st}">
+                    <h2 class="detail-title">${escapeHtml(ub.book?.title || "Unknown")}</h2>
+                    <p class="detail-author">${escapeHtml(ub.book?.author || "")}</p>
+                </div>
+                ${synopsis ? `
+                    <div class="synopsis-row">
+                        <button class="synopsis-toggle" id="synopsis-toggle">
+                            <span class="synopsis-label">Synopsis</span>
+                            <svg id="synopsis-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#94A3B8;"><path d="m18 15-6-6-6 6"/></svg>
+                        </button>
+                        <div class="synopsis-body" id="synopsis-body">${escapeHtml(synopsis)}</div>
+                    </div>
+                ` : ""}
+                <div class="borrow-section">
+                    <p class="borrow-label">Borrow options</p>
+                    ${borrowHtml}
+                </div>
+                <div class="detail-actions">
+                    <button class="remove-btn" id="remove-btn">Remove from list</button>
+                    <div id="remove-confirm" style="display:none;"></div>
+                </div>
+            `;
+
+            openSheet(document.getElementById("book-sheet"));
+
+            const toggle = document.getElementById("synopsis-toggle");
+            if (toggle) {
+                let open = true;
+                toggle.addEventListener("click", () => {
+                    open = !open;
+                    document.getElementById("synopsis-body").style.display = open ? "block" : "none";
+                    document.getElementById("synopsis-caret").style.transform = open ? "" : "rotate(180deg)";
+                });
+            }
+
+            document.getElementById("remove-btn").addEventListener("click", () => {
+                const confirmEl = document.getElementById("remove-confirm");
+                confirmEl.innerHTML = `
+                    <div class="confirm-remove">
+                        <p>Remove <strong>"${escapeHtml(ub.book?.title || "")}"</strong> from your reading list?</p>
+                        <div class="actions">
+                            <button class="cancel">Cancel</button>
+                            <button class="remove">Remove</button>
+                        </div>
+                    </div>
+                `;
+                confirmEl.style.display = "block";
+                document.getElementById("remove-btn").style.display = "none";
+                confirmEl.querySelector(".cancel").addEventListener("click", () => {
+                    confirmEl.style.display = "none";
+                    document.getElementById("remove-btn").style.display = "block";
+                });
+                confirmEl.querySelector(".remove").addEventListener("click", () => removeBook(ub.id));
+            });
+
+            document.querySelectorAll("[data-borrow]").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    window.open(btn.dataset.borrow, "_blank", "noopener");
+                });
+            });
+        }
+
+        function availStatus(row) {
+            if (row.available) return "available";
+            if (row.wait_text) return "waitlist";
+            return "unavailable";
+        }
+
+        async function removeBook(userBookId) {
+            try {
+                const resp = await fetch(`${API_BASE}/books/${userBookId}`, { method: "DELETE" });
+                if (!resp.ok) throw new Error("Failed to remove book");
+                if (selectedBook && selectedBook.id === userBookId) selectedBook = null;
+                closeSheet(document.getElementById("book-sheet"));
+                await loadBooks();
+                showToast("Book removed");
+            } catch (e) {
+                showToast(`Error: ${e.message}`, "error");
+            }
+        }
+
+        // ---------- refresh ----------
+
+        async function checkAllAvailability() {
+            const button = document.getElementById("refresh-btn");
+            const label = document.getElementById("refresh-label");
+            const icon = document.getElementById("refresh-icon");
+            button.disabled = true;
+            label.textContent = "Checking…";
+            icon.classList.add("spin");
+
+            try {
+                await fetch(`${API_BASE}/books/check-all`, { method: "POST" });
+            } catch (e) {
+                showToast("Availability check failed", "error");
+            } finally {
+                setTimeout(async () => {
+                    button.disabled = false;
+                    label.textContent = "Refresh";
+                    icon.classList.remove("spin");
+                    await loadBooks();
+                }, 1500);
+            }
+        }
+
+        // ---------- import sheet ----------
+
+        function renderImport() {
+            const body = document.getElementById("import-sheet-body");
+
+            if (importStep === "done") {
+                body.innerHTML = `
+                    <div class="import-success">
+                        <div class="success-check">
+                            <svg width="28" height="22" viewBox="0 0 28 22" fill="none"><path d="M2 11L10 19L26 3" stroke="#16A34A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </div>
+                        <div class="success-title h-serif">Import successful</div>
+                        <div class="success-sub">Checking availability for your books…</div>
+                        <button class="success-done" id="import-done">Done</button>
+                    </div>
+                `;
+                document.getElementById("import-done").addEventListener("click", closeImport);
+                return;
+            }
+
+            body.innerHTML = `
+                <div class="import-file">
+                    <h2 class="sheet-heading h-serif">Import reading list</h2>
+                    <p class="sheet-sub">Choose a CSV exported from Goodreads or StoryGraph</p>
+                    <div class="file-drop" id="import-drop">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        <p class="file-drop-label">Drag & drop your CSV here</p>
+                        <p class="file-drop-or">or</p>
+                        <button class="file-pick" id="file-pick" type="button">Choose CSV file…</button>
+                    </div>
+                    <div class="file-error" id="import-file-error"></div>
+                </div>
+            `;
+
+            const drop = document.getElementById("import-drop");
+            const pick = document.getElementById("file-pick");
+            const fileInput = document.getElementById("csv-file-input");
+            const openPicker = () => fileInput.click();
+            pick.addEventListener("click", openPicker);
+            drop.addEventListener("click", openPicker);
+            drop.addEventListener("dragover", (e) => {
+                e.preventDefault();
+                drop.classList.add("drag");
+            });
+            drop.addEventListener("dragleave", () => drop.classList.remove("drag"));
+            drop.addEventListener("drop", (e) => {
+                e.preventDefault();
+                drop.classList.remove("drag");
+                const file = e.dataTransfer.files && e.dataTransfer.files[0];
+                if (file) runImport(file);
+            });
+        }
+
+        function openImport() {
+            importStep = "file";
+            importSource = null;
+            importFile = null;
+            renderImport();
+            openSheet(document.getElementById("import-sheet"));
+            document.getElementById("csv-file-input").click();
+        }
+
+        function closeImport() {
+            importStep = "pick";
+            importSource = null;
+            importFile = null;
+            closeSheet(document.getElementById("import-sheet"));
+            loadBooks();
+        }
+
+        async function runImport(file) {
+            try {
+                const formData = new FormData();
+                formData.append("books_file", file);
+                const resp = await fetch(`${API_BASE}/books/import-csv`, {
+                    method: "POST",
+                    body: formData,
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.error || "Import failed");
+                importStep = "done";
+                renderImport();
+                // Kick off availability scanning so the imported books show up.
+                checkAllAvailability();
+            } catch (e) {
+                importStep = "pick";
+                renderImport();
+                showToast(`Error: ${e.message}`, "error");
+            }
+        }
+
+        // ---------- libraries sheet ----------
+
+        let librariesView = "list";
+
+        async function renderLibraries() {
+            const body = document.getElementById("libraries-sheet-body");
+
+            if (librariesView === "add") {
+                body.innerHTML = `
+                    <div class="libraries-header">
+                        <button class="libraries-back" id="libraries-back" type="button">&larr;</button>
+                        <div class="libraries-title">Add a library</div>
+                        <button class="sheet-close" id="libraries-close-inner">&times;</button>
+                    </div>
+                    <p class="lib-add-note">Pick a library to add. It will be enabled and searched on the next refresh.</p>
+                    <div id="lib-available-list"><div class="lib-add-note">Loading…</div></div>
+                `;
+
+                document.getElementById("libraries-back").addEventListener("click", () => {
+                    librariesView = "list";
+                    renderLibraries();
+                });
+                document.getElementById("libraries-close-inner").addEventListener("click", () =>
+                    closeSheet(document.getElementById("libraries-sheet")));
+
+                const list = document.getElementById("lib-available-list");
+                try {
+                    const resp = await fetch(`${API_BASE}/libraries/available`);
+                    const items = await resp.json();
+                    if (!items.length) {
+                        list.innerHTML = `<p class="lib-add-note">All supported libraries are already added.</p>`;
+                        return;
+                    }
+                    list.innerHTML = items.map(lib => `
+                        <div class="lib-row lib-available" data-key="${escapeHtml(lib.library_key)}">
+                            <div>
+                                <p class="lib-name">${escapeHtml(lib.label)}</p>
+                                <p class="lib-sub">${escapeHtml(lib.sub)}</p>
+                            </div>
+                            <span class="lib-add-arrow">+</span>
+                        </div>
+                    `).join("");
+                    list.querySelectorAll(".lib-available").forEach(row => {
+                        row.addEventListener("click", async () => {
+                            const key = row.dataset.key;
+                            try {
+                                const resp = await fetch(`${API_BASE}/libraries`, {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ library_key: key }),
+                                });
+                                if (!resp.ok) {
+                                    const err = await resp.json().catch(() => ({}));
+                                    throw new Error(err.error || "Failed to add library");
+                                }
+                                await loadLibraries();
+                                librariesView = "list";
+                                renderLibraries();
+                                showToast("Library added");
+                            } catch (e) {
+                                showToast(`Error: ${e.message}`, "error");
+                            }
+                        });
+                    });
+                } catch (e) {
+                    list.innerHTML = `<p class="lib-add-note">Couldn't load libraries.</p>`;
+                }
+                return;
+            }
+
+            const rows = libraryConfigs.map(lib => {
+                const sub = lib.library_key === "hoopla" ? "Unlimited borrows" : "via Libby";
+                return `
+                    <div class="lib-row">
+                        <div>
+                            <p class="lib-name">${escapeHtml(lib.label)}</p>
+                            <p class="lib-sub">${sub}</p>
+                        </div>
+                        <button class="switch ${lib.enabled ? "on" : ""}" data-id="${lib.id}" role="switch" aria-checked="${lib.enabled}">
+                            <span class="switch-knob"></span>
+                        </button>
+                    </div>
+                `;
+            }).join("");
+
+            body.innerHTML = `
+                <div class="libraries-header">
+                    <div class="libraries-title">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/></svg>
+                        My libraries
+                    </div>
+                    <button class="sheet-close" id="libraries-close-inner">&times;</button>
+                </div>
+                ${rows}
+                <button class="add-library" id="add-library">+ Add library</button>
+            `;
+
+            body.querySelectorAll(".switch").forEach(sw => {
+                sw.addEventListener("click", () => updateLibrary(Number(sw.dataset.id), !sw.classList.contains("on")));
+            });
+            document.getElementById("libraries-close-inner").addEventListener("click", () =>
+                closeSheet(document.getElementById("libraries-sheet")));
+            document.getElementById("add-library").addEventListener("click", () => {
+                librariesView = "add";
+                renderLibraries();
+            });
         }
 
         async function updateLibrary(libId, enabled) {
@@ -734,377 +1667,93 @@
                 await fetch(`${API_BASE}/libraries/${libId}`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ enabled })
+                    body: JSON.stringify({ enabled }),
                 });
-                // Reload to update the UI
                 await loadLibraries();
+                renderLibraries();
             } catch (e) {
-                console.error("Error updating library:", e);
+                showToast("Failed to update library", "error");
             }
         }
 
-        function openSettings() {
-            document.getElementById("settings-modal").classList.add("show");
+        function openLibraries() {
+            renderLibraries();
+            openSheet(document.getElementById("libraries-sheet"));
         }
 
-        function closeSettings() {
-            document.getElementById("settings-modal").classList.remove("show");
-        }
+        // ---------- wire up ----------
 
-        function openUpload() {
-            document.getElementById("upload-modal").classList.add("show");
-        }
+        document.getElementById("import-btn").addEventListener("click", openImport);
+        document.getElementById("refresh-btn").addEventListener("click", checkAllAvailability);
+        document.getElementById("libraries-btn").addEventListener("click", openLibraries);
 
-        function closeUpload() {
-            document.getElementById("upload-modal").classList.remove("show");
-            document.getElementById("csv-file-input").value = "";
-            document.getElementById("selected-csv-name").textContent = "";
-        }
+        document.getElementById("book-sheet-close").addEventListener("click", () =>
+            closeSheet(document.getElementById("book-sheet")));
+        document.getElementById("import-sheet-close").addEventListener("click", closeImport);
+        document.getElementById("libraries-sheet-close").addEventListener("click", () =>
+            closeSheet(document.getElementById("libraries-sheet")));
 
-        async function importCsv(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const button = document.getElementById("select-csv-btn");
-            const fileName = document.getElementById("selected-csv-name");
-            const originalText = button.textContent;
-            fileName.textContent = file.name;
-            button.disabled = true;
-            button.innerHTML = '<span class="spinner"></span> Importing';
-
-            try {
-                const formData = new FormData();
-                formData.append("books_file", file);
-                const response = await fetch(`${API_BASE}/books/import-csv`, {
-                    method: "POST",
-                    body: formData,
-                });
-                const data = await response.json();
-                if (!response.ok) {
-                    throw new Error(data.error || "CSV import failed");
-                }
-
-                closeUpload();
-                await loadBooks();
-                showStatus(`Imported ${data.added} of ${data.total} to-read books${data.skipped ? `; ${data.skipped} already in your list` : ""}.`, "success");
-            } catch (e) {
-                showStatus(`Error: ${e.message}`, "error");
-            } finally {
-                button.disabled = false;
-                button.textContent = originalText;
-            }
-        }
-
-        async function loadBooks() {
-            try {
-                const response = await fetch(`${API_BASE}/books`);
-                allBooks = await response.json();
-                renderBooks();
-            } catch (e) {
-                showStatus(`Error loading books: ${e.message}`, "error");
-            }
-        }
-
-        function renderBooks() {
-            const container = document.getElementById("books-container");
-            syncAvailableFilter();
-            
-            if (allBooks.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">📖</div>
-                        <div class="empty-state-title">No books yet</div>
-                        <p>Search for a book above to add it to your TBR list.</p>
-                    </div>
-                `;
-                return;
-            }
-
-            const availableCount = allBooks.filter(ub => ub.availability_summary?.available_now).length;
-            document.getElementById("available-count").textContent = availableCount;
-            const filteredBooks = allBooks.filter(ub => {
-                const formats = ub.availability_summary?.formats || [];
-
-                if (activeFormat === "all") {
-                    return !availableOnly || ub.availability_summary?.available_now;
-                }
-
-                const matchingFormats = formats.filter(item => {
-                    const format = (item.format || "").toLowerCase();
-                    return activeFormat === "ebook" ? format.includes("ebook") : format.includes("audio");
-                });
-                return matchingFormats.length > 0
-                    && (!availableOnly || matchingFormats.some(item => item.available));
+        ["book-sheet", "import-sheet", "libraries-sheet"].forEach(id => {
+            document.getElementById(id).addEventListener("mousedown", (e) => {
+                if (e.target === e.currentTarget) closeSheet(e.currentTarget);
             });
+        });
 
-            const grid = filteredBooks.map(ub => `
-                <div class="book-card ${ub.availability_summary?.available_now ? "has-availability" : ""}" onclick="openBookModal(${ub.id})">
-                    <span class="availability-indicator ${ub.availability_summary?.available_now ? "available" : ub.availability_summary?.checked ? "waitlist" : "unavailable"}"></span>
-                    <div class="book-info">
-                        <div class="book-title">${ub.book?.title || "Unknown"}</div>
-                        <div class="book-author">${ub.book?.author || "Unknown"}</div>
-                    </div>
-                    <div class="book-formats">
-                        ${(ub.availability_summary?.formats || []).map(format => formatIcon(format)).join("")}
-                    </div>
-                </div>
-            `).join("");
+        document.getElementById("search-input").addEventListener("input", (e) => {
+            searchQuery = e.target.value;
+            document.getElementById("clear-btn").style.display = searchQuery ? "block" : "none";
+            renderBooks();
+        });
+        document.getElementById("clear-btn").addEventListener("click", () => {
+            searchQuery = "";
+            document.getElementById("search-input").value = "";
+            document.getElementById("clear-btn").style.display = "none";
+            renderBooks();
+        });
 
-            container.innerHTML = filteredBooks.length
-                ? `<div class="book-grid">${grid}</div>`
-                : `<div class="empty-state"><div class="empty-state-title">No matching books</div><p>Try another format or turn off the Available filter.</p></div>`;
-        }
+        document.querySelectorAll(".filter-pill").forEach(button => {
+            button.addEventListener("click", () => {
+                activeFormat = button.dataset.format;
+                document.querySelectorAll(".filter-pill").forEach(item => item.classList.toggle("active", item === button));
+                renderBooks();
+            });
+        });
 
-        function formatIcon(availability) {
-            const status = availability.available ? "available" : availability.wait_text ? "waitlist" : "unavailable";
-            const isAudio = availability.format.toLowerCase().includes("audio");
-            const paths = isAudio
-                ? '<path d="M4 13a8 8 0 0 1 16 0"/><path d="M4 13v5a2 2 0 0 0 2 2h1v-7H4z"/><path d="M20 13v5a2 2 0 0 1-2 2h-1v-7h3z"/>'
-                : '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5v-15z"/><path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20"/>';
-            return `<svg class="format-icon ${status}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-label="${availability.format}">${paths}</svg>`;
-        }
+        document.getElementById("available-filter").addEventListener("click", () => {
+            availableOnly = !availableOnly;
+            document.getElementById("available-filter").classList.toggle("active", availableOnly);
+            const dot = document.getElementById("available-dot");
+            dot.innerHTML = availableOnly ? '<span class="dot-fill"></span>' : "";
+            renderBooks();
+        });
 
-        function handleSearch() {
-            const query = document.getElementById("search-input").value.trim();
-            searchGeneration += 1;
-            clearTimeout(searchTimeout);
-            
-            if (!query) {
-                clearSearchResults();
+        document.getElementById("sort-btn").addEventListener("click", (e) => {
+            e.stopPropagation();
+            const menu = document.getElementById("sort-menu");
+            if (menu.style.display !== "none") {
+                menu.style.display = "none";
                 return;
             }
+            menu.style.display = "block";
+            const r = document.getElementById("sort-btn").getBoundingClientRect();
+            menu.style.top = (r.bottom + 6) + "px";
+            menu.style.left = Math.max(8, r.right - 192) + "px";
+            menu.style.right = "auto";
+        });
+        document.addEventListener("mousedown", (e) => {
+            const wrap = document.querySelector(".sort-wrap");
+            if (wrap && !wrap.contains(e.target)) document.getElementById("sort-menu").style.display = "none";
+        });
+        renderSortMenu();
 
-            const generation = searchGeneration;
-            searchTimeout = setTimeout(() => performSearch(query, generation), 300);
-        }
+        document.getElementById("csv-file-input").addEventListener("change", async (e) => {
+            const file = e.target.files[0];
+            if (file) await runImport(file);
+            e.target.value = "";
+        });
 
-        function clearSearchResults() {
-            const container = document.getElementById("search-results");
-            container.innerHTML = "";
-            container.style.display = "none";
-        }
-
-        async function performSearch(query, generation) {
-            const [title, ...authorParts] = query.split(" by ");
-            const author = authorParts.join(" by ") || "";
-
-            try {
-                const response = await fetch(`${API_BASE}/books/search`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ title, author })
-                });
-                const data = await response.json();
-                if (generation !== searchGeneration || query !== document.getElementById("search-input").value.trim()) {
-                    return;
-                }
-                if (!response.ok) {
-                    throw new Error(data.error || "Book search failed");
-                }
-                displaySearchResults(data.results || []);
-            } catch (e) {
-                console.error("Search failed:", e);
-                showStatus(e.message, "error");
-            }
-        }
-
-        function displaySearchResults(results) {
-            const container = document.getElementById("search-results");
-            
-            if (results.length === 0) {
-                clearSearchResults();
-                return;
-            }
-
-            const html = results.map(r => `
-                <div class="search-result-item">
-                    <div class="search-result-text">
-                        <div class="search-result-title">${r.title}</div>
-                        <div class="search-result-author">${r.author}</div>
-                    </div>
-                    <button class="search-result-add" onclick="addBook(
-                        '${r.title.replace(/'/g, "\\'")}',
-                        '${r.author.replace(/'/g, "\\'")}',
-                        '${r.isbn || ""}'
-                    )">Add</button>
-                </div>
-            `).join("");
-
-            container.innerHTML = html;
-            container.style.display = "block";
-        }
-
-        async function addBook(title, author, isbn) {
-            try {
-                searchGeneration += 1;
-                clearTimeout(searchTimeout);
-                const response = await fetch(`${API_BASE}/books`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ title, author, isbn })
-                });
-
-                if (response.status === 409) {
-                    showStatus("Book already in your TBR", "warning");
-                    return;
-                }
-
-                if (!response.ok) {
-                    throw new Error("Failed to add book");
-                }
-
-                document.getElementById("search-input").value = "";
-                clearSearchResults();
-                
-                await loadBooks();
-                showStatus("Book added!", "success");
-            } catch (e) {
-                showStatus(`Error: ${e.message}`, "error");
-            }
-        }
-
-        async function openBookModal(userBookId) {
-            try {
-                const userBook = allBooks.find(b => b.id === userBookId);
-                if (!userBook) return;
-
-                const response = await fetch(`${API_BASE}/books/${userBookId}/availability`);
-                const data = await response.json();
-
-                const book = data.book;
-                const availability = [];
-                const seenAvailability = new Set();
-                for (const entry of data.availability || []) {
-                    const key = [entry.library, entry.provider, entry.format, entry.available, entry.wait_text].join("|");
-                    if (!seenAvailability.has(key)) {
-                        seenAvailability.add(key);
-                        availability.push(entry);
-                    }
-                }
-
-                let availHtml = "";
-                if (availability.length === 0) {
-                    const checkedMessage = data.last_checked_at
-                        ? "No matching copies found in your selected libraries."
-                        : "Availability has not been checked yet.";
-                    availHtml = `
-                        <div style="padding: 12px; color: #7d8999; text-align: center;">
-                            <p style="margin: 0 0 12px;">${checkedMessage}</p>
-                            <button class="btn btn-primary" style="margin: 0 auto;" 
-                                onclick="checkAvailability(${userBookId})">
-                                ${data.last_checked_at ? "Check again" : "Check Availability"}
-                            </button>
-                        </div>
-                    `;
-                } else {
-                    availHtml = availability.map(a => `
-                        <div class="availability-item ${a.available ? "available" : a.wait_text ? "waitlist" : ""}">
-                            <div class="availability-info">
-                                <div class="availability-provider">${a.format}</div>
-                                <div class="availability-format">${a.provider} · ${a.library}</div>
-                                ${a.wait_text ? `<div style="font-size: 12px; color: #d98a10; margin-top: 4px;">${a.wait_text}${a.holds ? ` · ${a.holds} hold(s)` : ""}</div>` : ""}
-                            </div>
-                            <div class="availability-status ${a.available ? "available" : a.wait_text ? "waitlist" : "unavailable"}">
-                                ${a.available && a.url ? `<a href="${a.url}" target="_blank" rel="noopener" style="color: inherit; text-decoration: none;">Borrow</a>` : a.available ? "Available" : a.wait_text ? "Waitlist" : "Unavailable"}
-                            </div>
-                        </div>
-                    `).join("");
-                }
-
-                const isAvailable = availability.some(entry => entry.available);
-                const html = `
-                    <div class="book-detail">
-                        <div class="book-detail-header">
-                            <span class="availability-indicator ${isAvailable ? "available" : availability.length ? "waitlist" : "unavailable"}"></span>
-                            <div class="book-detail-info">
-                                <h2>${book.title}</h2>
-                            </div>
-                        </div>
-                        <div class="book-detail-author">${book.author}</div>
-                        ${book.synopsis ? `<p style="font-size: 14px; line-height: 1.5; color: #333;">${book.synopsis.substring(0, 200)}…</p>` : ""}
-                    </div>
-                    <div class="availability-section">
-                        <h3>Availability</h3>
-                        ${availHtml}
-                    </div>
-                    <div class="modal-actions">
-                        <button class="btn btn-secondary" onclick="removeBook(${userBookId})">Remove from TBR</button>
-                    </div>
-                `;
-
-                document.getElementById("modal-content").innerHTML = html;
-                document.getElementById("book-modal").classList.add("show");
-            } catch (e) {
-                showStatus(`Error: ${e.message}`, "error");
-            }
-        }
-
-        async function checkAvailability(userBookId) {
-            try {
-                const btn = event.target;
-                btn.disabled = true;
-                btn.innerHTML = '<span class="spinner"></span> Checking…';
-
-                const response = await fetch(`${API_BASE}/books/${userBookId}/check`, {
-                    method: "POST"
-                });
-
-                if (!response.ok) throw new Error("Check failed");
-
-                await openBookModal(userBookId);
-                await loadBooks();
-            } catch (e) {
-                showStatus(`Error: ${e.message}`, "error");
-            }
-        }
-
-        async function checkAllAvailability() {
-            const button = document.getElementById("refresh-availability-btn");
-            const originalText = button.textContent;
-            button.disabled = true;
-            button.innerHTML = '<span class="spinner"></span> Checking all';
-
-            try {
-                const response = await fetch(`${API_BASE}/books/check-all`, { method: "POST" });
-                const data = await response.json();
-                if (!response.ok) {
-                    throw new Error(data.error || "Availability check failed");
-                }
-
-                await loadBooks();
-                const failed = data.failures.length;
-                showStatus(`Checked ${data.checked} of ${data.total} books${failed ? `; ${failed} could not be checked` : ""}.`, failed ? "warning" : "success");
-            } catch (e) {
-                showStatus(`Error: ${e.message}`, "error");
-            } finally {
-                button.disabled = false;
-                button.textContent = originalText;
-            }
-        }
-
-        async function removeBook(userBookId) {
-            if (!confirm("Remove this book from your TBR?")) return;
-
-            try {
-                await fetch(`${API_BASE}/books/${userBookId}`, { method: "DELETE" });
-                closeModal();
-                await loadBooks();
-                showStatus("Book removed", "success");
-            } catch (e) {
-                showStatus(`Error: ${e.message}`, "error");
-            }
-        }
-
-        function closeModal() {
-            document.getElementById("book-modal").classList.remove("show");
-        }
-
-        function showStatus(message, type = "info") {
-            const status = document.getElementById("status");
-            status.textContent = message;
-            status.className = `show ${type}`;
-            setTimeout(() => status.classList.remove("show"), 3000);
-        }
+        loadBooks();
+        loadLibraries();
     </script>
 </body>
 </html>

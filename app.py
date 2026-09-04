@@ -4,11 +4,13 @@ import json
 import os
 import threading
 import time
+from datetime import datetime, timezone
+
 import requests
 from requests import RequestException
 from concurrent.futures import ThreadPoolExecutor
 
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, redirect, url_for
 
 from models import db, Book, UserBook, Availability, LibraryConfig
 from library.isbn import find_isbn
@@ -445,100 +447,10 @@ def analyze_book(job_id, index):
             job["completed"] += 1
 
 
-@app.route("/", methods=["GET", "POST"])
+@app.route("/", methods=["GET"])
 def home():
-
-    if request.method == "GET":
-        return render_template(
-            "index.html",
-            books=[],
-            total_books=0,
-            uploaded=False,
-        )
-
-    csv_file = request.files.get("books_file")
-
-    if not csv_file:
-        return jsonify({
-            "error": "No CSV file uploaded."
-        }), 400
-
-    if not csv_file.filename:
-        return jsonify({
-            "error": "CSV file must have a filename."
-        }), 400
-
-    try:
-        books = load_books(csv_file)
-    except ValueError as e:
-        return jsonify({
-            "error": str(e)
-        }), 400
-    except Exception as e:
-        print(f"Unexpected error loading CSV: {e}")
-        return jsonify({
-            "error": "Failed to process CSV file. Please check the file format."
-        }), 400
-
-    job_id = str(id(books))
-
-    # Get selected libraries from request: JSON array of configs, e.g.
-    # [{"key": "oakland", "bibliocommons": "oaklandlibrary", "hoopla": true}, ...]
-    # Preset keys are re-resolved server-side so custom entries can't spoof a preset's config.
-    try:
-        raw_configs = json.loads(request.form.get("libraries", "[]"))
-    except (ValueError, TypeError):
-        raw_configs = []
-
-    library_configs = []
-    for entry in raw_configs:
-        if not isinstance(entry, dict):
-            continue
-        key = (entry.get("key") or "").strip().lower()
-        if key in LIBRARY_PRESETS:
-            library_configs.append(LIBRARY_PRESETS[key])
-        elif key:
-            library_configs.append({
-                "key": key,
-                "bibliocommons": (entry.get("bibliocommons") or "").strip() or None,
-                "overdrive": (entry.get("overdrive") or "").strip() or None,
-                "hoopla": bool(entry.get("hoopla")),
-            })
-
-    if not library_configs:
-        return jsonify({
-            "error": "No libraries selected. Click the gear icon and choose at least one library."
-        }), 400
-
-    # Opportunistically sweep expired jobs so memory doesn't grow unbounded
-    # on a long-running deployed process (a local dev server gets restarted
-    # often enough that this never mattered before).
-    now = time.time()
-    for old_job_id in [
-        jid for jid, j in jobs.items()
-        if now - j["created_at"] > JOB_TIMEOUT_SECONDS
-    ]:
-        del jobs[old_job_id]
-
-    jobs[job_id] = {
-        "books": books,
-        "completed": 0,
-        "created_at": time.time(),
-        "library_configs": library_configs,
-        "lock": threading.Lock(),
-    }
-
-    for index in range(len(books)):
-        executor.submit(
-            analyze_book,
-            job_id,
-            index
-        )
-
-    return jsonify({
-        "job_id": job_id,
-        "total": len(books),
-    })
+    # The TBR list (templates/tbr.html) is now the app's home screen.
+    return redirect(url_for("tbr"))
 
 
 @app.route("/status")
@@ -612,6 +524,12 @@ def list_books():
         for user_book in user_books:
             book_data = user_book.to_dict_with_book()
             availability = user_book.book.availability if user_book.book else []
+
+            # Full cached rows for the frontend's borrow-options/status model:
+            # one entry per library/provider/format with holds and wait info.
+            book_data["availability"] = [result.to_dict() for result in availability]
+
+            # Per-format summary used by the list-view filters and icon dots.
             formats_by_name = {}
             for result in availability:
                 format_name = result.format or "Unknown"
@@ -946,7 +864,7 @@ def _refresh_availability(user_book, configs):
             url=getattr(result, "url", None),
         ))
 
-    user_book.last_checked_at = __import__("datetime").datetime.utcnow()
+    user_book.last_checked_at = datetime.now(timezone.utc)
     db.session.commit()
 
 
@@ -1017,6 +935,29 @@ def get_libraries():
         return jsonify({"error": "Failed to get libraries"}), 500
 
 
+@app.route("/api/libraries/available", methods=["GET"])
+def available_libraries():
+    """Libraries the user has not added yet (from the shipped presets)."""
+    try:
+        existing = {
+            c.library_key
+            for c in LibraryConfig.query.filter_by(user_id=1).all()
+        }
+        result = [
+            {
+                "library_key": key,
+                "label": preset["label"],
+                "sub": "Unlimited borrows" if preset.get("hoopla") else "via Libby",
+            }
+            for key, preset in LIBRARY_PRESETS.items()
+            if key not in existing
+        ]
+        return jsonify(result)
+    except Exception as e:
+        print(f"Error listing available libraries: {e}")
+        return jsonify({"error": "Failed to list libraries"}), 500
+
+
 @app.route("/api/libraries/<int:library_id>", methods=["PATCH"])
 def update_library(library_id):
     """
@@ -1043,6 +984,60 @@ def update_library(library_id):
         db.session.rollback()
         print(f"Error updating library: {e}")
         return jsonify({"error": "Failed to update library"}), 500
+
+
+@app.route("/api/libraries", methods=["POST"])
+def add_library():
+    """
+    Add a library to the user's configuration and enable it.
+
+    Preset: {"library_key": "sfpl"}
+    Custom: {"library_key": "my_lib", "label": "...", "bibliocommons": "subdomain"}
+            or {"library_key": "my_lib", "label": "...", "overdrive": "subdomain"}
+    """
+    try:
+        data = request.get_json() or {}
+        library_key = (data.get("library_key") or "").strip().lower()
+        if not library_key:
+            return jsonify({"error": "library_key is required"}), 400
+
+        existing = LibraryConfig.query.filter_by(user_id=1, library_key=library_key).first()
+        if existing:
+            return jsonify({"error": "That library is already configured"}), 409
+
+        preset = LIBRARY_PRESETS.get(library_key)
+        if preset:
+            label = preset["label"]
+            bibliocommons = preset.get("bibliocommons")
+            overdrive = preset.get("overdrive")
+            hoopla = preset.get("hoopla", False)
+        else:
+            label = (data.get("label") or "").strip()
+            if not label:
+                return jsonify({"error": "Unknown library_key; provide a label for a custom library"}), 400
+            bibliocommons = (data.get("bibliocommons") or "").strip() or None
+            overdrive = (data.get("overdrive") or "").strip() or None
+            hoopla = bool(data.get("hoopla"))
+            if not bibliocommons and not overdrive and not hoopla:
+                return jsonify({"error": "A custom library needs bibliocommons, overdrive, or hoopla"}), 400
+
+        new_library = LibraryConfig(
+            user_id=1,
+            library_key=library_key,
+            label=label,
+            bibliocommons=bibliocommons,
+            overdrive=overdrive,
+            hoopla=hoopla,
+            enabled=True,
+        )
+        db.session.add(new_library)
+        db.session.commit()
+        return jsonify(new_library.to_dict()), 201
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error adding library: {e}")
+        return jsonify({"error": "Failed to add library"}), 500
 
 
 if __name__ == "__main__":
