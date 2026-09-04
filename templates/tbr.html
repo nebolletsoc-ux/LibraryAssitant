@@ -1294,6 +1294,26 @@
             });
         }
 
+        function sortableTitle(title) {
+            // Alphabetize by title, dropping leading articles (A / An / The).
+            return String(title || "")
+                .trim()
+                .replace(/^(a|an|the)\s+/i, "")
+                .toLowerCase();
+        }
+
+        function sortableAuthor(author) {
+            // Alphabetize by surname: "Rebecca Solnit" -> "solnit, rebecca".
+            // Already-surname-first names ("Powers, Richard") sort on the surname.
+            const raw = String(author || "").trim();
+            if (!raw) return "";
+            const comma = raw.indexOf(",");
+            if (comma > -1) return raw.slice(0, comma).trim().toLowerCase();
+            const parts = raw.split(/\s+/);
+            if (parts.length < 2) return raw.toLowerCase();
+            return (parts.pop() + ", " + parts.join(" ")).toLowerCase();
+        }
+
         function filteredBooks() {
             const q = searchQuery.toLowerCase();
             const filtered = allBooks.filter(ub => {
@@ -1309,8 +1329,8 @@
 
             filtered.sort((a, b) => {
                 switch (sortKey) {
-                    case "title-asc": return (a.book?.title || "").localeCompare(b.book?.title || "");
-                    case "author-asc": return (a.book?.author || "").localeCompare(b.book?.author || "");
+                    case "title-asc": return sortableTitle(a.book?.title).localeCompare(sortableTitle(b.book?.title));
+                    case "author-asc": return sortableAuthor(a.book?.author).localeCompare(sortableAuthor(b.book?.author));
                     case "date-desc": return new Date(b.added_at) - new Date(a.added_at);
                     case "date-asc": return new Date(a.added_at) - new Date(b.added_at);
                     default: return (

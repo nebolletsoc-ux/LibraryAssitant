@@ -15,6 +15,26 @@ def _fmt(v):
     return (v or "").lower()
 
 
+def sortable_title(title):
+    # Alphabetize by title, dropping leading articles (A / An / The).
+    import re
+    return re.sub(r"^(a|an|the)\s+", "", (title or "").strip(), flags=re.IGNORECASE).lower()
+
+
+def sortable_author(author):
+    # Alphabetize by surname: "Rebecca Solnit" -> "solnit, rebecca".
+    # Already-surname-first names ("Powers, Richard") sort on the surname.
+    raw = str(author or "").strip()
+    if not raw:
+        return ""
+    if "," in raw:
+        return raw.split(",", 1)[0].strip().lower()
+    parts = raw.split()
+    if len(parts) < 2:
+        return raw.lower()
+    return (parts.pop() + ", " + " ".join(parts)).lower()
+
+
 def rows_for(ub, format_):
     rows = ub.get("availability") or []
     if format_ == "all":
@@ -55,9 +75,9 @@ def filtered_books(books, query="", active_format="all", available_only=False, s
 
     def key(ub):
         if sort_key == "title-asc":
-            return ((ub.get("book") or {}).get("title", "").lower(),)
+            return (sortable_title((ub.get("book") or {}).get("title", "")),)
         if sort_key == "author-asc":
-            return ((ub.get("book") or {}).get("author", "").lower(),)
+            return (sortable_author((ub.get("book") or {}).get("author", "")),)
         if sort_key == "date-desc":
             return (-_epoch(ub.get("added_at")),)
         if sort_key == "date-asc":
@@ -271,6 +291,51 @@ def test_sort_author_asc():
     ]
     result = filtered_books(books, sort_key="author-asc")
     assert [b["id"] for b in result] == [2, 1]
+
+
+def test_sort_author_uses_surname_not_first_name():
+    books = [
+        book(1, title="A", author="Rebecca Solnit", availability=[row("eBook", True)]),
+        book(2, title="B", author="Richard Powers", availability=[row("eBook", True)]),
+    ]
+    # Powers before Solnit = surname order (was first-name order before the fix).
+    assert [b["id"] for b in filtered_books(books, sort_key="author-asc")] == [2, 1]
+
+
+def test_sort_author_handles_surname_first_form():
+    books = [
+        book(1, title="A", author="Whitman, Walt", availability=[row("eBook", True)]),
+        book(2, title="B", author="Powers, Richard", availability=[row("eBook", True)]),
+    ]
+    assert [b["id"] for b in filtered_books(books, sort_key="author-asc")] == [2, 1]
+
+
+def test_sort_author_single_name_does_not_crash():
+    books = [
+        book(1, title="A", author="", availability=[row("eBook", True)]),
+        book(2, title="B", author="Powers", availability=[row("eBook", True)]),
+    ]
+    assert [b["id"] for b in filtered_books(books, sort_key="author-asc")] == [1, 2]
+
+
+def test_sort_title_drops_leading_articles():
+    books = [
+        book(1, title="Zebra", availability=[row("eBook", True)]),
+        book(2, title="The Apple", availability=[row("eBook", True)]),
+        book(3, title="A Fig", availability=[row("eBook", True)]),
+        book(4, title="An Eel", availability=[row("eBook", True)]),
+    ]
+    # Ignored articles: Apple, Eel, Fig, Zebra.
+    assert [b["id"] for b in filtered_books(books, sort_key="title-asc")] == [2, 4, 3, 1]
+
+
+def test_sort_title_keeps_article_words_in_the_middle():
+    books = [
+        book(1, title="The Closer", availability=[row("eBook", True)]),
+        book(2, title="Reading The Woods", availability=[row("eBook", True)]),
+    ]
+    # "Closer" sorts before "Woods"; interior "The" is preserved.
+    assert [b["id"] for b in filtered_books(books, sort_key="title-asc")] == [1, 2]
 
 
 def test_sort_date_desc_then_asc():
