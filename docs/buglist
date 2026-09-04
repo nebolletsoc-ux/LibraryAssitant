@@ -31,7 +31,8 @@ Library Assistant — Bug/Feature List (revised)
    name from popup if all libraries share the same Hoopla behavior
    FIXED — Hoopla is its own toggle, independent of Berkeley (this part
    was done in an earlier round). Popup now shows just "Hoopla" instead
-   of the redundant "Hoopla · hoopla".
+   of the redundant "Hoopla · hoopla". -- NOT FIXED -- popup still showing "hoopla - oakland"
+   instead of "hoopla"
 
 7. app remembers which libraries are selected, session to session
    ALREADY WORKING — tested this directly (save, reload, confirm), no
@@ -69,7 +70,7 @@ Library Assistant — Bug/Feature List (revised)
 
 14. add support for free ebook sites such as annas-archive.gl 
 
-15. 
+15. some of "boorow" links are incorrect -- take to wrong book or wrong format
 
 ——————————————————————————————————————
 STILL OPEN — need something from you to move forward:
