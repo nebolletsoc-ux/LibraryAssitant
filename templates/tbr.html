@@ -90,6 +90,103 @@
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .spin { animation: spin 1s linear infinite; }
 
+        .status-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: #FFFBEB;
+            border-bottom: 1px solid #FDE68A;
+            font-size: 12px;
+            font-weight: 600;
+            color: #92400E;
+        }
+
+        .status-bar-spinner {
+            width: 12px;
+            height: 12px;
+            border: 2px solid #FDE68A;
+            border-top-color: #B45309;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .online-section {
+            padding: 12px 16px;
+            border-top: 1px solid #E2E8F0;
+        }
+
+        .online-heading {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #64748B;
+            margin: 0 0 8px;
+        }
+
+        .online-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 0;
+            border-bottom: 1px solid #F1F5F9;
+        }
+
+        .online-row:last-child {
+            border-bottom: none;
+        }
+
+        .online-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .online-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #0F172A;
+            margin: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .online-author {
+            font-size: 12px;
+            color: #64748B;
+            margin: 2px 0 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .online-add {
+            flex-shrink: 0;
+            border: 1.5px solid #0F172A;
+            background: #0F172A;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 7px 14px;
+            border-radius: 999px;
+            cursor: pointer;
+        }
+
+        .online-chip {
+            flex-shrink: 0;
+            font-size: 11px;
+            font-weight: 600;
+            color: #94A3B8;
+        }
+
+        .online-note {
+            padding: 10px 16px;
+            font-size: 12px;
+            color: #64748B;
+            text-align: center;
+        }
+
         .libraries-btn {
             display: flex;
             flex-direction: column;
@@ -358,6 +455,7 @@
         .book-card.available { background: #E6F9EE; }
         .book-card.waitlist { background: #FFF7DC; }
         .book-card.unavailable { background: #FFFFFF; }
+        .book-card.pending { background: #F1F5F9; }
 
         .book-info { flex: 1; min-width: 0; }
 
@@ -429,6 +527,14 @@
             color: #94A3B8;
         }
 
+        .legend-count {
+            margin-left: auto;
+            font-size: 11px;
+            font-weight: 600;
+            color: #64748B;
+            white-space: nowrap;
+        }
+
         .legend-swatch {
             width: 10px;
             height: 10px;
@@ -439,6 +545,7 @@
         .legend-swatch.available { background: #E6F9EE; }
         .legend-swatch.waitlist { background: #FFF7DC; }
         .legend-swatch.unavailable { background: #FFFFFF; }
+        .legend-swatch.pending { background: #F1F5F9; }
 
         /* ---------- Bottom sheets ---------- */
 
@@ -519,6 +626,7 @@
         .detail-header.available { background: #E6F9EE; }
         .detail-header.waitlist { background: #FFF7DC; }
         .detail-header.unavailable { background: #F8FAFC; }
+        .detail-header.pending { background: #F1F5F9; }
 
         .detail-title {
             font-size: 18px;
@@ -564,6 +672,11 @@
             font-size: 14px;
             color: #475569;
             line-height: 1.6;
+        }
+
+        .synopsis-placeholder {
+            color: #94A3B8;
+            font-style: italic;
         }
 
         .borrow-section {
@@ -708,161 +821,6 @@
         .confirm-remove .actions button.remove {
             color: #E11D48;
             font-weight: 700;
-        }
-
-        /* ---------- Import sheet ---------- */
-
-        .import-pick, .import-paste {
-            padding: 8px 20px 20px;
-        }
-
-        .sheet-heading {
-            font-size: 18px;
-            font-weight: 700;
-            color: #0F172A;
-            margin-bottom: 4px;
-            font-family: 'Plus Jakarta Sans', sans-serif;
-        }
-
-        .sheet-sub {
-            font-size: 13px;
-            color: #94A3B8;
-            margin-bottom: 20px;
-        }
-
-        .import-option {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            width: 100%;
-            padding: 16px;
-            border-radius: 16px;
-            border: 1px solid #E2E8F0;
-            text-align: left;
-            cursor: pointer;
-            font-family: inherit;
-            margin-bottom: 12px;
-            transition: border-color .15s, transform .05s;
-        }
-
-        .import-option:hover { border-color: #CBD5E1; }
-        .import-option:active { transform: scale(0.99); }
-
-        .import-option.goodreads { background: #E8F5E9; }
-        .import-option.storygraph { background: #EDE7F6; }
-        .import-option.file { background: #E3F2FD; }
-
-        .import-option-icon {
-            width: 40px;
-            height: 40px;
-            border-radius: 12px;
-            background: #fff;
-            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #64748B;
-            flex-shrink: 0;
-        }
-
-        .import-option-label { font-size: 15px; font-weight: 600; color: #0F172A; }
-        .import-option-sub { font-size: 12px; color: #64748B; margin-top: 2px; line-height: 1.4; }
-
-        .howto-box {
-            padding: 12px;
-            border-radius: 12px;
-            background: #FFFBEB;
-            border: 1px solid #FDE68A;
-            margin-bottom: 16px;
-        }
-
-        .howto-box strong { font-size: 12px; color: #92400E; font-weight: 600; }
-        .howto-box p { font-size: 12px; color: #B45309; margin-top: 4px; line-height: 1.5; }
-
-        .paste-input {
-            width: 100%;
-            height: 144px;
-            padding: 12px 16px;
-            background: #F8FAFC;
-            border: 1px solid #E2E8F0;
-            border-radius: 16px;
-            font-size: 13px;
-            color: #334155;
-            outline: none;
-            resize: none;
-            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-            transition: box-shadow .15s;
-        }
-
-        .paste-input:focus { box-shadow: 0 0 0 2px rgba(245, 194, 97, 0.6); }
-
-        .sheet-actions {
-            display: flex;
-            gap: 8px;
-            margin-top: 16px;
-        }
-
-        .sheet-actions button {
-            flex: 1;
-            padding: 12px;
-            border-radius: 16px;
-            font-size: 14px;
-            font-weight: 600;
-            font-family: inherit;
-            cursor: pointer;
-            border: 1px solid #E2E8F0;
-            background: #fff;
-            color: #64748B;
-        }
-
-        .sheet-actions button.primary {
-            border: none;
-            color: #fff;
-            font-weight: 700;
-            background: #16A34A;
-        }
-
-        .sheet-actions button.primary:disabled { background: #CBD5E1; }
-
-        .import-success {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 40px 20px 48px;
-            gap: 16px;
-        }
-
-        .success-check {
-            width: 64px;
-            height: 64px;
-            border-radius: 999px;
-            background: #DCFCE7;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .success-title { font-size: 17px; font-weight: 700; color: #0F172A; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .success-sub { font-size: 13px; color: #64748B; margin-top: 4px; text-align: center; }
-
-        .success-done {
-            width: 100%;
-            padding: 12px;
-            border-radius: 16px;
-            border: none;
-            background: #1C1917;
-            color: #fff;
-            font-size: 14px;
-            font-weight: 700;
-            cursor: pointer;
-            font-family: inherit;
-        }
-
-        .file-error {
-            margin-top: 12px;
-            font-size: 13px;
-            color: #E11D48;
-            text-align: center;
         }
 
         /* ---------- Libraries sheet ---------- */
@@ -1044,16 +1002,24 @@
             </div>
         </header>
 
+        <div id="status-bar" class="status-bar" style="display:none;">
+            <span class="status-bar-spinner spin"></span>
+            <span id="status-bar-text"></span>
+        </div>
+
         <div class="list-wrap">
             <div id="books-container">
                 <div class="empty-state">
                     <p class="msg">Loading…</p>
                 </div>
             </div>
+            <div id="online-results"></div>
             <div class="legend">
                 <span class="legend-item"><span class="legend-swatch available"></span>Available</span>
                 <span class="legend-item"><span class="legend-swatch waitlist"></span>Waitlist</span>
                 <span class="legend-item"><span class="legend-swatch unavailable"></span>Unavailable</span>
+                <span class="legend-item"><span class="legend-swatch pending"></span>Not checked</span>
+                <span class="legend-count" id="checked-count"></span>
             </div>
         </div>
     </div>
@@ -1064,15 +1030,6 @@
             <div class="sheet-grabber"></div>
             <button class="sheet-close" id="book-sheet-close">&times;</button>
             <div class="sheet-body" id="book-sheet-body"></div>
-        </div>
-    </div>
-
-    <!-- Import sheet -->
-    <div id="import-sheet" class="sheet-overlay" aria-hidden="true">
-        <div class="sheet">
-            <div class="sheet-grabber"></div>
-            <button class="sheet-close" id="import-sheet-close">&times;</button>
-            <div class="sheet-body" id="import-sheet-body"></div>
         </div>
     </div>
 
@@ -1098,11 +1055,8 @@
         let sortKey = "status";
         let searchQuery = "";
         let selectedBook = null;
-        let importStep = "pick";
-        let importSource = null;
-        let importFile = null;
 
-        const STATUS_ORDER = { available: 0, waitlist: 1, unavailable: 2 };
+        const STATUS_ORDER = { available: 0, waitlist: 1, unavailable: 2, pending: 3 };
         const SORT_OPTIONS = [
             { id: "status", label: "Availability" },
             { id: "title-asc", label: "Title A–Z" },
@@ -1126,6 +1080,7 @@
 
         function statusOf(ub, format) {
             const rows = rowsFor(ub, format);
+            if (rows.length === 0) return "pending";
             if (rows.some(r => r.available)) return "available";
             if (rows.some(r => r.wait_text)) return "waitlist";
             return "unavailable";
@@ -1144,7 +1099,29 @@
 
         function providerLabel(row) {
             const provider = row.provider || "";
-            return `${provider} · ${libraryLabel(row.library)}`;
+            if (provider.toLowerCase() === "hoopla" || (row.library || "").toLowerCase() === "hoopla") {
+                return "Hoopla";
+            }
+            return provider ? `${provider} · ${libraryLabel(row.library)}` : libraryLabel(row.library);
+        }
+
+        function detailRowKey(row) {
+            return `${fmt(row.format)}::${(row.library || "").toLowerCase()}`;
+        }
+
+        function detailRowScore(row) {
+            const status = STATUS_ORDER[availStatus(row)] ?? 3;
+            return status * 10000 + (row.url ? 0 : 1000) + (row.holds != null ? 0 : 100) + (row.wait_weeks ? 0 : 10);
+        }
+
+        function dedupeDetailRows(rows) {
+            const best = new Map();
+            for (const row of rows) {
+                const key = detailRowKey(row);
+                const cur = best.get(key);
+                if (!cur || detailRowScore(row) < detailRowScore(cur)) best.set(key, row);
+            }
+            return [...best.values()];
         }
 
         let toastTimer = null;
@@ -1190,6 +1167,12 @@
             const rows = filteredBooks();
 
             document.getElementById("available-count").textContent = availableCount();
+
+            const checkedEl = document.getElementById("checked-count");
+            if (checkedEl) {
+                const checked = allBooks.filter(ub => ub.availability_summary?.checked).length;
+                checkedEl.textContent = `${checked} of ${allBooks.length} books checked`;
+            }
 
             if (rows.length === 0) {
                 const hasAny = allBooks.length > 0;
@@ -1252,7 +1235,7 @@
                 if (q && !title.includes(q) && !author.includes(q)) return false;
 
                 const rows = rowsFor(ub, activeFormat);
-                if (rows.length === 0) return false;
+                if (activeFormat !== "all" && rows.length === 0) return false;
                 if (availableOnly && !rows.some(r => r.available)) return false;
                 return true;
             });
@@ -1319,7 +1302,7 @@
             selectedBook = ub;
 
             const st = statusOf(ub, "all");
-            const rows = [...(ub.availability || [])].sort(
+            const rows = dedupeDetailRows(ub.availability || []).sort(
                 (a, b) => STATUS_ORDER[availStatus(a)] - STATUS_ORDER[availStatus(b)]
             );
 
@@ -1329,6 +1312,16 @@
                     const rs = availStatus(row);
                     const isE = isEbook(row.format);
                     const est = waitEstimate(row);
+                    const displayFormat = (row.format || "Unknown");
+                    const subParts = [];
+                    const pl = providerLabel(row);
+                    if (pl) subParts.push(pl);
+                    if (row.holds != null) subParts.push(`${row.holds} hold${row.holds === 1 ? "" : "s"}`);
+                    if (est) subParts.push(est);
+                    const subText = subParts.join(" · ");
+                    const ctaBtn = (rs === "available" || rs === "waitlist") && row.url
+                        ? `<button data-borrow="${escapeHtml(row.url)}">${rs === "available" ? "Borrow" : "Join waitlist"}</button>`
+                        : `<span class="status-text ${rs}">${rs === "available" ? "Available" : rs === "waitlist" ? "Waitlist" : "Unavailable"}</span>`;
                     return `
                         <div class="borrow-item ${rs}">
                             <div class="borrow-icon">
@@ -1337,20 +1330,10 @@
                                     : `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/></svg>`}
                             </div>
                             <div class="borrow-info">
-                                <p class="borrow-format">${escapeHtml(row.format || "Unknown")}</p>
-                                <p class="borrow-sub">
-                                    ${escapeHtml(providerLabel(row))}
-                                    ${row.holds != null ? ` · ${row.holds} hold${row.holds === 1 ? "" : "s"}` : ""}
-                                    ${est ? `<span class="wait-tag"> · ${est}</span>` : ""}
-                                </p>
+                                <p class="borrow-format">${escapeHtml(displayFormat)}</p>
+                                <p class="borrow-sub">${escapeHtml(subText) || "&nbsp;"}</p>
                             </div>
-                            <div class="borrow-cta">
-                                ${rs === "available"
-                                    ? (row.url
-                                        ? `<button data-borrow="${escapeHtml(row.url)}">Borrow</button>`
-                                        : `<span class="status-text available">Available</span>`)
-                                    : `<span class="status-text ${rs}">${rs === "waitlist" ? "Waitlist" : "Unavailable"}</span>`}
-                            </div>
+                            <div class="borrow-cta">${ctaBtn}</div>
                         </div>
                     `;
                 }).join("");
@@ -1362,15 +1345,15 @@
                     <h2 class="detail-title">${escapeHtml(ub.book?.title || "Unknown")}</h2>
                     <p class="detail-author">${escapeHtml(ub.book?.author || "")}</p>
                 </div>
-                ${synopsis ? `
-                    <div class="synopsis-row">
-                        <button class="synopsis-toggle" id="synopsis-toggle">
-                            <span class="synopsis-label">Synopsis</span>
-                            <svg id="synopsis-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#94A3B8;"><path d="m18 15-6-6-6 6"/></svg>
-                        </button>
-                        <div class="synopsis-body" id="synopsis-body">${escapeHtml(synopsis)}</div>
-                    </div>
-                ` : ""}
+                <div class="synopsis-row">
+                    <button class="synopsis-toggle" id="synopsis-toggle">
+                        <span class="synopsis-label">Synopsis</span>
+                        <svg id="synopsis-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#94A3B8;"><path d="m18 15-6-6-6 6"/></svg>
+                    </button>
+                    <div class="synopsis-body" id="synopsis-body">${synopsis
+                        ? escapeHtml(synopsis)
+                        : `<span class="synopsis-placeholder">Fetching synopsis\u2026</span>`}</div>
+                </div>
                 <div class="borrow-section">
                     <p class="borrow-label">Borrow options</p>
                     ${borrowHtml}
@@ -1382,6 +1365,7 @@
             `;
 
             openSheet(document.getElementById("book-sheet"));
+            if (!synopsis) fetchSynopsis(ub.id);
 
             const toggle = document.getElementById("synopsis-toggle");
             if (toggle) {
@@ -1439,6 +1423,25 @@
             }
         }
 
+        async function fetchSynopsis(userBookId) {
+            try {
+                const resp = await fetch(`${API_BASE}/books/${userBookId}/synopsis`, { method: "POST" });
+                const data = await resp.json();
+                const body = document.getElementById("synopsis-body");
+                if (!body) return;
+                if (data.synopsis) {
+                    body.textContent = data.synopsis;
+                    const ub = allBooks.find(b => b.id === userBookId);
+                    if (ub && ub.book) ub.book.synopsis = data.synopsis;
+                } else {
+                    body.textContent = "No synopsis available for this title.";
+                }
+            } catch (e) {
+                const body = document.getElementById("synopsis-body");
+                if (body) body.textContent = "Synopsis unavailable.";
+            }
+        }
+
         // ---------- refresh ----------
 
         async function checkAllAvailability() {
@@ -1448,6 +1451,7 @@
             button.disabled = true;
             label.textContent = "Checking…";
             icon.classList.add("spin");
+            scanStatus("Scanning availability");
 
             try {
                 await fetch(`${API_BASE}/books/check-all`, { method: "POST" });
@@ -1458,83 +1462,44 @@
                     button.disabled = false;
                     label.textContent = "Refresh";
                     icon.classList.remove("spin");
+                    scanStatus("");
                     await loadBooks();
                 }, 1500);
             }
         }
 
-        // ---------- import sheet ----------
+        let scanTimer = null;
+        let scanStartedAt = null;
 
-        function renderImport() {
-            const body = document.getElementById("import-sheet-body");
-
-            if (importStep === "done") {
-                body.innerHTML = `
-                    <div class="import-success">
-                        <div class="success-check">
-                            <svg width="28" height="22" viewBox="0 0 28 22" fill="none"><path d="M2 11L10 19L26 3" stroke="#16A34A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        </div>
-                        <div class="success-title h-serif">Import successful</div>
-                        <div class="success-sub">Checking availability for your books…</div>
-                        <button class="success-done" id="import-done">Done</button>
-                    </div>
-                `;
-                document.getElementById("import-done").addEventListener("click", closeImport);
+        function scanStatus(text) {
+            const bar = document.getElementById("status-bar");
+            const el = document.getElementById("status-bar-text");
+            if (!text) {
+                if (scanTimer) clearInterval(scanTimer);
+                scanTimer = null;
+                scanStartedAt = null;
+                bar.style.display = "none";
                 return;
             }
-
-            body.innerHTML = `
-                <div class="import-file">
-                    <h2 class="sheet-heading h-serif">Import reading list</h2>
-                    <p class="sheet-sub">Choose a CSV exported from Goodreads or StoryGraph</p>
-                    <div class="file-drop" id="import-drop">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                        <p class="file-drop-label">Drag & drop your CSV here</p>
-                        <p class="file-drop-or">or</p>
-                        <button class="file-pick" id="file-pick" type="button">Choose CSV file…</button>
-                    </div>
-                    <div class="file-error" id="import-file-error"></div>
-                </div>
-            `;
-
-            const drop = document.getElementById("import-drop");
-            const pick = document.getElementById("file-pick");
-            const fileInput = document.getElementById("csv-file-input");
-            const openPicker = () => fileInput.click();
-            pick.addEventListener("click", openPicker);
-            drop.addEventListener("click", openPicker);
-            drop.addEventListener("dragover", (e) => {
-                e.preventDefault();
-                drop.classList.add("drag");
-            });
-            drop.addEventListener("dragleave", () => drop.classList.remove("drag"));
-            drop.addEventListener("drop", (e) => {
-                e.preventDefault();
-                drop.classList.remove("drag");
-                const file = e.dataTransfer.files && e.dataTransfer.files[0];
-                if (file) runImport(file);
-            });
+            if (!scanStartedAt) scanStartedAt = Date.now();
+            const render = () => {
+                const sec = Math.round((Date.now() - scanStartedAt) / 1000);
+                el.textContent = `${text} \u00b7 ${sec}s`;
+            };
+            render();
+            if (!scanTimer) scanTimer = setInterval(render, 1000);
+            bar.style.display = "flex";
         }
+
+        // ---------- import from CSV ----------
 
         function openImport() {
-            importStep = "file";
-            importSource = null;
-            importFile = null;
-            renderImport();
-            openSheet(document.getElementById("import-sheet"));
             document.getElementById("csv-file-input").click();
-        }
-
-        function closeImport() {
-            importStep = "pick";
-            importSource = null;
-            importFile = null;
-            closeSheet(document.getElementById("import-sheet"));
-            loadBooks();
         }
 
         async function runImport(file) {
             try {
+                scanStatus("Importing reading list");
                 const formData = new FormData();
                 formData.append("books_file", file);
                 const resp = await fetch(`${API_BASE}/books/import-csv`, {
@@ -1543,15 +1508,122 @@
                 });
                 const data = await resp.json();
                 if (!resp.ok) throw new Error(data.error || "Import failed");
-                importStep = "done";
-                renderImport();
-                // Kick off availability scanning so the imported books show up.
-                checkAllAvailability();
+                const added = data.added || 0;
+                const total = data.total || 0;
+                if (added > 0) {
+                    scanStatus(`Scanning ${added} book${added === 1 ? "" : "s"}`);
+                    await loadBooks();
+                    showToast(`Imported ${added} of ${total} books`, "success");
+                    // Kick off availability scanning so the imported books show up.
+                    checkAllAvailability();
+                } else {
+                    scanStatus("");
+                    showToast("No new books in that file", "warning");
+                }
             } catch (e) {
-                importStep = "pick";
-                renderImport();
+                scanStatus("");
+                showToast(`Import failed: ${e.message}`, "error");
+            }
+        }
+
+        // ---------- online search / add ----------
+
+        let onlineTimer = null;
+
+        function renderOnlineResults() {
+            const wrap = document.getElementById("online-results");
+            const q = searchQuery.trim();
+            if (q.length < 3) {
+                wrap.innerHTML = "";
+                return;
+            }
+            clearTimeout(onlineTimer);
+            wrap.innerHTML = `<div class="online-note">Searching online for \u201c${escapeHtml(q)}\u201d\u2026</div>`;
+            onlineTimer = setTimeout(async () => {
+                if (document.getElementById("search-input").value.trim() !== q) return;
+                try {
+                    const resp = await fetch(`${API_BASE}/books/search`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ title: q }),
+                    });
+                    const data = await resp.json();
+                    if (!resp.ok) throw new Error(data.error || "Search failed");
+                    if (document.getElementById("search-input").value.trim() !== q) return;
+                    renderOnlineResultsList(q, (data.results || []).slice(0, 5));
+                } catch (e) {
+                    if (document.getElementById("search-input").value.trim() === q) {
+                        wrap.innerHTML = "";
+                    }
+                }
+            }, 400);
+        }
+
+        function renderOnlineResultsList(q, results) {
+            const wrap = document.getElementById("online-results");
+            if (!results.length) {
+                wrap.innerHTML = `<div class="online-note">No online matches for \u201c${escapeHtml(q)}\u201d.</div>`;
+                return;
+            }
+            const existing = new Set(
+                allBooks.map(b => (b.book?.title || "").trim().toLowerCase())
+            );
+            const rows = results.map((r, i) => {
+                const already = existing.has((r.title || "").trim().toLowerCase());
+                return `
+                    <div class="online-row">
+                        <div class="online-info">
+                            <p class="online-title">${escapeHtml(r.title)}</p>
+                            <p class="online-author">${escapeHtml(r.author || "Unknown")}${r.year ? ` · ${escapeHtml(String(r.year))}` : ""}</p>
+                        </div>
+                        ${already
+                            ? `<span class="online-chip">On your list</span>`
+                            : `<button class="online-add" data-idx="${i}">+ Add</button>`}
+                    </div>
+                `;
+            }).join("");
+            wrap.innerHTML = `
+                <div class="online-section">
+                    <p class="online-heading">Add from online search</p>
+                    ${rows}
+                </div>
+            `;
+            wrap.querySelectorAll(".online-add").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    addSearchResult(results[Number(btn.dataset.idx)]);
+                });
+            });
+        }
+
+        async function addSearchResult(r) {
+            try {
+                const resp = await fetch(`${API_BASE}/books`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        title: r.title,
+                        author: r.author,
+                        isbn: r.isbn || null,
+                        cover_id: r.cover_id,
+                    }),
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.error || "Couldn't add book");
+                showToast("Added to your list \u00b7 checking availability\u2026", "success");
+                await loadBooks();
+                renderOnlineResults();
+                if (data.id) checkBookAvailability(data.id);
+            } catch (e) {
                 showToast(`Error: ${e.message}`, "error");
             }
+        }
+
+        async function checkBookAvailability(bookId) {
+            try {
+                await fetch(`${API_BASE}/books/${bookId}/check`, { method: "POST" });
+                await loadBooks();
+                renderOnlineResults();
+            } catch (e) { /* keep the just-added row as-is */ }
         }
 
         // ---------- libraries sheet ----------
@@ -1689,11 +1761,10 @@
 
         document.getElementById("book-sheet-close").addEventListener("click", () =>
             closeSheet(document.getElementById("book-sheet")));
-        document.getElementById("import-sheet-close").addEventListener("click", closeImport);
         document.getElementById("libraries-sheet-close").addEventListener("click", () =>
             closeSheet(document.getElementById("libraries-sheet")));
 
-        ["book-sheet", "import-sheet", "libraries-sheet"].forEach(id => {
+        ["book-sheet", "libraries-sheet"].forEach(id => {
             document.getElementById(id).addEventListener("mousedown", (e) => {
                 if (e.target === e.currentTarget) closeSheet(e.currentTarget);
             });
@@ -1703,12 +1774,14 @@
             searchQuery = e.target.value;
             document.getElementById("clear-btn").style.display = searchQuery ? "block" : "none";
             renderBooks();
+            renderOnlineResults();
         });
         document.getElementById("clear-btn").addEventListener("click", () => {
             searchQuery = "";
             document.getElementById("search-input").value = "";
             document.getElementById("clear-btn").style.display = "none";
             renderBooks();
+            renderOnlineResults();
         });
 
         document.querySelectorAll(".filter-pill").forEach(button => {

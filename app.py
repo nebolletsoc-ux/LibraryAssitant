@@ -209,6 +209,32 @@ def fetch_synopsis(isbn, title, author):
     except Exception as e:
         print(f"Edition lookup failed for '{title}' ({isbn}): {e}")
 
+    # Step 1.5: if the ISBN lookup didn't resolve a work (e.g. synthetic
+    # "synthetic-*" / "cover-*" ISBNs from the search/add flow), search
+    # Open Library by title+author to find the work record.
+    if not work_key:
+        try:
+            query = f"title:{title}"
+            if author:
+                query += f" author:{author}"
+            response = requests.get(
+                "https://openlibrary.org/search.json",
+                params={"q": query, "limit": 3},
+                headers=headers,
+                timeout=4,
+            )
+            response.raise_for_status()
+            docs = (response.json() or {}).get("docs") or []
+            for doc in docs:
+                for key in doc.get("seed") or []:
+                    if isinstance(key, str) and key.startswith("/works/"):
+                        work_key = key
+                        break
+                if work_key:
+                    break
+        except Exception as e:
+            print(f"Title-search work lookup failed for '{title}': {e}")
+
     # Step 2: work lookup — this is where the description usually lives.
     if work_key:
         try:
@@ -713,6 +739,40 @@ def add_book():
         db.session.rollback()
         print(f"Error adding book: {e}")
         return jsonify({"error": "Failed to add book"}), 500
+
+
+@app.route("/api/books/<int:user_book_id>/synopsis", methods=["POST"])
+def book_synopsis(user_book_id):
+    """
+    Fetch and cache a synopsis for a book in the user's TBR list.
+
+    Books added via CSV import or the online search never got a synopsis
+    fetched at add time; this endpoint resolves it lazily (with Open Library
+    and a persisted cache on the Book record) the first time the detail
+    sheet is opened.
+    """
+    user_book = UserBook.query.filter_by(id=user_book_id).first()
+    if not user_book or not user_book.book:
+        return jsonify({"error": "Book not found"}), 404
+
+    book = user_book.book
+    if not book.synopsis and not book.genre:
+        try:
+            synopsis, genre = fetch_synopsis(book.isbn, book.title, book.author)
+            if synopsis:
+                book.synopsis = synopsis
+            if genre:
+                book.genre = genre
+            db.session.commit()
+        except Exception as e:
+            print(f"Synopsis fetch failed for '{book.title}': {e}")
+
+    return jsonify({
+        "id": book.id,
+        "title": book.title,
+        "synopsis": book.synopsis,
+        "genre": book.genre,
+    })
 
 
 @app.route("/api/books/import-csv", methods=["POST"])

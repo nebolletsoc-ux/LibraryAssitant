@@ -26,11 +26,16 @@ def rows_for(ub, format_):
 
 def status_of(ub, format_="all"):
     rows = rows_for(ub, format_)
+    if len(rows) == 0:
+        return "pending"
     if any(r.get("available") for r in rows):
         return "available"
     if any(r.get("wait_text") for r in rows):
         return "waitlist"
     return "unavailable"
+
+
+_STATUS_ORDER = {"available": 0, "waitlist": 1, "unavailable": 2, "pending": 3}
 
 
 def filtered_books(books, query="", active_format="all", available_only=False, sort_key="status"):
@@ -42,7 +47,7 @@ def filtered_books(books, query="", active_format="all", available_only=False, s
         if q and q not in title and q not in author:
             continue
         rows = rows_for(ub, active_format)
-        if len(rows) == 0:
+        if active_format != "all" and len(rows) == 0:
             continue
         if available_only and not any(r.get("available") for r in rows):
             continue
@@ -57,13 +62,48 @@ def filtered_books(books, query="", active_format="all", available_only=False, s
             return (-_epoch(ub.get("added_at")),)
         if sort_key == "date-asc":
             return (_epoch(ub.get("added_at")),)
-        return ({"available": 0, "waitlist": 1, "unavailable": 2}[status_of(ub, active_format)],)
+        return (_STATUS_ORDER[status_of(ub, active_format)],)
 
     return sorted(filtered, key=key)
 
 
 def available_count(books, active_format="all"):
     return sum(1 for ub in books if any(r.get("available") for r in rows_for(ub, active_format)))
+
+
+# ---------- book detail sheet mirror ---------------------------------------
+
+def _row_status(r):
+    if r.get("available"):
+        return "available"
+    if r.get("wait_text"):
+        return "waitlist"
+    return "unavailable"
+
+
+def dedupe_detail_rows(rows):
+    best = {}
+    for row in rows:
+        key = f"{_fmt(row.get('format'))}::{ (row.get('library') or '').lower()}"
+        score = (_STATUS_ORDER[_row_status(row)] * 10000
+                 + (0 if row.get("url") else 1000)
+                 + (0 if row.get("holds") is not None else 100)
+                 + (0 if row.get("wait_weeks") else 10))
+        if key not in best or score < best[key][1]:
+            best[key] = (row, score)
+    return [entry[0] for entry in best.values()]
+
+
+def provider_label(row):
+    if (row.get("provider") or "").lower() == "hoopla" or (row.get("library") or "").lower() == "hoopla":
+        return "Hoopla"
+    provider = row.get("provider") or ""
+    library = row.get("library")
+    return f"{provider} · {library}" if provider else library
+
+
+def detail_format(row):
+    return row.get("format") or "Unknown"
 
 
 def _epoch(s):
@@ -104,9 +144,9 @@ def test_all_status_waitlist_when_only_waitlist_rows():
     assert status_of(ub, "all") == "waitlist"
 
 
-def test_all_status_unavailable_when_no_rows():
+def test_all_status_pending_when_no_rows():
     ub = book(1, availability=[])
-    assert status_of(ub, "all") == "unavailable"
+    assert status_of(ub, "all") == "pending"
 
 
 def test_ebook_status_uses_only_ebook_rows():
@@ -120,9 +160,9 @@ def test_ebook_status_uses_only_ebook_rows():
 
 # ---------- filtering -------------------------------------------------------
 
-def test_no_availability_rows_are_hidden_even_on_all():
+def test_pending_books_visible_even_when_no_rows():
     books = [book(1, availability=[row("eBook", True)]), book(2, availability=[])]
-    assert [b["id"] for b in filtered_books(books)] == [1]
+    assert sorted(b["id"] for b in filtered_books(books)) == [1, 2]
 
 
 def test_all_shows_all_with_availability():
@@ -252,3 +292,47 @@ def test_available_count_respects_format_filter():
     assert available_count(books, "all") == 2
     assert available_count(books, "ebook") == 1
     assert available_count(books, "audio") == 1
+
+
+# ---------- book detail sheet -----------------------------------------------
+
+def test_detail_dedupes_same_format_and_library():
+    rows = [
+        {"format": "eBook", "library": "hoopla", "provider": "Hoopla", "available": False, "wait_text": "wait"},
+        {"format": "eBook", "library": "hoopla", "provider": "Hoopla", "available": False, "wait_text": "wait"},
+        {"format": "eBook", "library": "hoopla", "provider": "Hoopla", "available": True},
+    ]
+    out = dedupe_detail_rows(rows)
+    assert len(out) == 1
+    assert out[0]["available"] is True
+
+
+def test_detail_dedupe_prefers_available_over_waitlist():
+    rows = [
+        {"format": "eBook", "library": "berkeley", "available": False, "wait_text": "wait", "holds": 9},
+        {"format": "eBook", "library": "berkeley", "available": True},
+    ]
+    out = dedupe_detail_rows(rows)
+    assert len(out) == 1
+    assert out[0]["available"] is True
+
+
+def test_detail_keeps_distinct_formats_and_libraries():
+    rows = [
+        {"format": "eBook", "library": "oakland", "available": True},
+        {"format": "eBook", "library": "berkeley", "available": False, "wait_text": "wait"},
+        {"format": "Audiobook", "library": "berkeley", "available": True},
+    ]
+    assert len(dedupe_detail_rows(rows)) == 3
+
+
+def test_detail_hoopla_label_is_single():
+    row = {"format": "Digital", "library": "hoopla", "provider": "Hoopla", "available": True}
+    assert provider_label(row) == "Hoopla"
+    assert "Hoopla · Hoopla" not in (provider_label(row) + detail_format(row))
+
+
+def test_detail_non_hoopla_label_keeps_provider_and_library():
+    row = {"format": "eBook", "library": "berkeley", "provider": "Libby", "available": False, "wait_text": "wait"}
+    assert provider_label(row) == "Libby · berkeley"
+    assert detail_format(row) == "eBook"
