@@ -1,0 +1,10 @@
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+.env
+
+# Local-only runtime data: the TBR database is personal data and must
+# stay out of git. Recreate automatically on first app startup.
+instance/*.db
+instance/*.db.bak
