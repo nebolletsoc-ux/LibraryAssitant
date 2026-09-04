@@ -23,48 +23,37 @@ app = Flask(__name__)
 database_url = os.environ.get("DATABASE_URL", "sqlite:///library_assistant.db")
 app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+# Allow concurrent scan threads to wait out SQLite write locks.
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+    "connect_args": {"timeout": 30},
+}
 
 # Initialize database
 db.init_app(app)
+
+# Shipped library presets. LAPL is the only prepopulated one because its
+# Libby/OverDrive catalog (lapl.overdrive.com) is the largest single
+# public-library selection in the US.
+LIBRARY_PRESETS = {
+    "lapl": {"key": "lapl", "label": "Los Angeles Public Library", "overdrive": "lapl"},
+}
 
 # Create all tables on app startup
 with app.app_context():
     db.create_all()
     
-    # Initialize default library configuration
+    # Initialize default library configuration from the shipped presets.
     if LibraryConfig.query.count() == 0:
-        default_configs = [
-            LibraryConfig(
+        for key, preset in LIBRARY_PRESETS.items():
+            db.session.add(LibraryConfig(
                 user_id=1,
-                library_key="oakland",
-                label="Oakland Public Library",
-                bibliocommons="oaklandlibrary",
-                enabled=False
-            ),
-            LibraryConfig(
-                user_id=1,
-                library_key="berkeley",
-                label="Berkeley Public Library",
-                overdrive="berkeleypubliclibrary",
-                enabled=False
-            ),
-            LibraryConfig(
-                user_id=1,
-                library_key="redwood_city",
-                label="Redwood City Public Library",
-                bibliocommons="rcpl",
-                enabled=False
-            ),
-            LibraryConfig(
-                user_id=1,
-                library_key="hoopla",
-                label="Hoopla",
-                hoopla=True,
-                enabled=False
-            ),
-        ]
-        for config in default_configs:
-            db.session.add(config)
+                library_key=key,
+                label=preset["label"],
+                bibliocommons=preset.get("bibliocommons"),
+                overdrive=preset.get("overdrive"),
+                hoopla=bool(preset.get("hoopla")),
+                enabled=True,
+            ))
         db.session.commit()
         print("✓ Initialized default library configuration")
 
@@ -107,24 +96,6 @@ JOB_TIMEOUT_SECONDS = 3600  # Clean up jobs after 1 hour
 executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
 
 jobs = {}
-
-# Known libraries the app ships with. Any Bibliocommons/OverDrive library
-# can be added by a user as a "custom" entry without needing new code here.
-#
-# Hoopla is its own preset rather than bundled into any one library, since
-# its catalog is shared/global — access to it depends on whichever library
-# card grants it, not on which OverDrive/Bibliocommons system is selected.
-LIBRARY_PRESETS = {
-    "oakland": {"key": "oakland", "label": "Oakland Public Library", "bibliocommons": "oaklandlibrary"},
-    "berkeley": {"key": "berkeley", "label": "Berkeley Public Library", "overdrive": "berkeleypubliclibrary"},
-    "redwood_city": {"key": "redwood_city", "label": "Redwood City Public Library", "bibliocommons": "rcpl"},
-    "hoopla": {"key": "hoopla", "label": "Hoopla", "hoopla": True},
-    "sfpl": {"key": "sfpl", "label": "San Francisco Public Library", "bibliocommons": "sfpl"},
-    "ssfpl": {"key": "ssfpl", "label": "South San Francisco Public Library", "bibliocommons": "ssfpl"},
-    "alameda_county": {"key": "alameda_county", "label": "Alameda County Library", "bibliocommons": "aclibrary"},
-    "contra_costa_county": {"key": "contra_costa_county", "label": "Contra Costa County Library", "bibliocommons": "ccclib"},
-}
-
 
 def validate_csv_structure(fieldnames):
     """Validate CSV has required columns. Returns (is_valid, error_message)."""
@@ -857,6 +828,28 @@ def remove_book(user_book_id):
         return jsonify({"error": "Failed to remove book"}), 500
 
 
+@app.route("/api/books/clear", methods=["DELETE"])
+def clear_tbr_list():
+    """
+    Remove every book from the user's TBR list.
+
+    Guarded by a required "confirm" token so it can't be triggered
+    accidentally; Book/Availability records are left in place.
+    """
+    data = request.get_json(silent=True) or {}
+    if data.get("confirm") != "clear_all":
+        return jsonify({"error": "Confirmation required"}), 400
+
+    try:
+        deleted = UserBook.query.filter_by(user_id=1, status="tbr").delete()
+        db.session.commit()
+        return jsonify({"message": "Reading list cleared", "deleted": deleted}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error clearing TBR list: {e}")
+        return jsonify({"error": "Failed to clear list"}), 500
+
+
 @app.route("/api/books/<int:user_book_id>/check", methods=["POST"])
 def check_availability(user_book_id):
     """
@@ -928,30 +921,53 @@ def _refresh_availability(user_book, configs):
     db.session.commit()
 
 
+def _refresh_one_book(user_book_id, configs):
+    """Refresh one TBR entry in a worker thread.
+
+    Each worker pushes its own app context so Flask-SQLAlchemy hands it a
+    private scoped session (no cross-thread session sharing).
+    """
+    with app.app_context():
+        user_book = UserBook.query.filter_by(id=user_book_id).first()
+        if not user_book or not user_book.book:
+            return {"id": user_book_id, "title": None, "error": "missing"}
+        title = user_book.book.title
+        try:
+            _refresh_availability(user_book, configs)
+            return {"id": user_book_id, "title": title}
+        except Exception as e:
+            db.session.rollback()
+            print(f"Error checking {title}: {e}")
+            return {"id": user_book_id, "title": title, "error": str(e)}
+
+
 @app.route("/api/books/check-all", methods=["POST"])
 def check_all_availability():
-    """Refresh every TBR entry, retaining successful checks if one fails."""
+    """Refresh every TBR entry, retaining successful checks if one fails.
+
+    Books are scanned concurrently (sharing the module-level pool) so a
+    large list no longer takes tens of minutes serially.
+    """
     configs = _library_search_configs()
     if not configs:
         return jsonify({"error": "No libraries configured"}), 400
 
     user_books = UserBook.query.filter_by(user_id=1, status="tbr").all()
-    failures = []
-    checked = 0
+    if not user_books:
+        return jsonify({"total": 0, "checked": 0, "failures": []}), 200
 
-    for user_book in user_books:
-        user_book_id = user_book.id
-        book_title = user_book.book.title
-        try:
-            _refresh_availability(user_book, configs)
-            checked += 1
-        except Exception as e:
-            db.session.rollback()
-            print(f"Error checking {book_title}: {e}")
-            failures.append({"id": user_book_id, "title": book_title})
+    futures = [
+        executor.submit(_refresh_one_book, user_book.id, configs)
+        for user_book in user_books
+    ]
+    results = [future.result() for future in futures]
+
+    total = len(user_books)
+    checked = sum(1 for r in results if not r.get("error"))
+    failures = [{"id": r["id"], "title": r["title"]} for r in results if r.get("error")]
 
     return jsonify({
-        "total": len(user_books),
+        "total": total,
         "checked": checked,
         "failures": failures,
     }), 200

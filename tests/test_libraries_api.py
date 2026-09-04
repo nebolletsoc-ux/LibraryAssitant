@@ -6,8 +6,9 @@ def test_get_libraries_returns_defaults(client):
     assert resp.status_code == 200
     data = resp.get_json()
     keys = [lib["library_key"] for lib in data]
-    for expected in ("oakland", "berkeley", "redwood_city", "hoopla"):
-        assert expected in keys
+    # LAPL is the only prepopulated library.
+    assert keys == ["lapl"]
+    assert data[0]["label"] == "Los Angeles Public Library"
     # Defaults are all disabled in fixtures.
     assert all(lib["enabled"] is False for lib in data)
 
@@ -21,14 +22,14 @@ def test_get_libraries_always_has_user1(client, app_context):
 
 def test_update_library_enables_it(client):
     libs = client.get("/api/libraries").get_json()
-    oakland = next(l for l in libs if l["library_key"] == "oakland")
+    lapl = next(l for l in libs if l["library_key"] == "lapl")
 
-    resp = client.patch(f"/api/libraries/{oakland['id']}", json={"enabled": True})
+    resp = client.patch(f"/api/libraries/{lapl['id']}", json={"enabled": True})
     assert resp.status_code == 200
     assert resp.get_json()["enabled"] is True
 
     after = client.get("/api/libraries").get_json()
-    assert next(l for l in after if l["id"] == oakland["id"])["enabled"] is True
+    assert next(l for l in after if l["id"] == lapl["id"])["enabled"] is True
 
 
 def test_update_library_disables_it(client):
@@ -56,27 +57,8 @@ def test_update_with_no_body_keeps_current(client):
 
 # ---------- add library (POST /api/libraries) ----------
 
-def test_add_preset_library_from_available(client, app_context):
-    from models import LibraryConfig, db
-
-    with app_context.app.app_context():
-        LibraryConfig.query.filter_by(library_key="sfpl").delete()
-        db.session.commit()
-
-    resp = client.post("/api/libraries", json={"library_key": "sfpl"})
-    assert resp.status_code == 201
-    data = resp.get_json()
-    assert data["library_key"] == "sfpl"
-    assert data["bibliocommons"] == "sfpl"
-    assert data["label"] == "San Francisco Public Library"
-    assert data["enabled"] is True
-
-    keys = [lib["library_key"] for lib in client.get("/api/libraries").get_json()]
-    assert "sfpl" in keys
-
-
 def test_add_preset_already_configured_returns_409(client):
-    resp = client.post("/api/libraries", json={"library_key": "berkeley"})
+    resp = client.post("/api/libraries", json={"library_key": "lapl"})
     assert resp.status_code == 409
     assert "already configured" in resp.get_json()["error"]
 
@@ -122,17 +104,27 @@ def test_available_libraries_are_presets_not_configured(client):
         assert "library_key" in lib and "label" in lib
 
 
+def test_available_libraries_present_when_lapl_not_configured(client, app_context):
+    from models import LibraryConfig, db
+
+    with app_context.app.app_context():
+        LibraryConfig.query.filter_by(user_id=1).delete()
+        db.session.commit()
+
+    data = client.get("/api/libraries/available").get_json()
+    keys = [lib["library_key"] for lib in data]
+    assert "lapl" in keys
+    assert next(lib for lib in data if lib["library_key"] == "lapl")["label"] == "Los Angeles Public Library"
+
+
 def test_available_libraries_empty_when_all_seeded(client, app_context):
     from models import LibraryConfig, db
 
     with app_context.app.app_context():
         for config in LibraryConfig.query.filter_by(user_id=1).all():
-            if config.library_key not in ("oakland", "berkeley", "hoopla"):
+            if config.library_key != "lapl":
                 db.session.delete(config)
         db.session.commit()
 
     data = client.get("/api/libraries/available").get_json()
-    keys = [lib["library_key"] for lib in data]
-    assert "sfpl" in keys
-    assert "redwood_city" in keys
-    assert "oakland" not in keys and "berkeley" not in keys
+    assert data == []

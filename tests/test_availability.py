@@ -88,7 +88,7 @@ def test_check_missing_book_returns_404(client):
 
 def enable_default_library(client):
     libs = client.get("/api/libraries").get_json()
-    target = next(l for l in libs if l["library_key"] == "oakland")
+    target = next(l for l in libs if l["library_key"] == "lapl")
     resp = client.patch(f"/api/libraries/{target['id']}", json={"enabled": True})
     assert resp.status_code == 200
 
@@ -116,6 +116,35 @@ def test_check_all_returns_error_when_no_libraries(client):
     resp = client.post("/api/books/check-all")
     assert resp.status_code == 400
     assert "No libraries" in resp.get_json()["error"]
+
+
+# ---------- clear entire TBR list (DELETE /api/books/clear) ----------
+
+def test_clear_tbr_requires_confirmation(client):
+    resp = client.delete("/api/books/clear")
+    assert resp.status_code == 400
+    assert "Confirmation" in resp.get_json()["error"]
+
+
+def test_clear_tbr_removes_every_entry(client, app_context):
+    add(client, title="A", isbn="9781111111111")
+    add(client, title="B", isbn="9782222222222")
+
+    resp = client.delete("/api/books/clear", json={"confirm": "clear_all"})
+    assert resp.status_code == 200
+    assert resp.get_json()["deleted"] == 2
+    assert client.get("/api/books").get_json() == []
+
+    from models import Book
+    with app_context.app.app_context():
+        # Book records are retained (only the TBR rows are removed).
+        assert Book.query.count() == 2
+
+
+def test_clear_tbr_on_empty_list(client):
+    resp = client.delete("/api/books/clear", json={"confirm": "clear_all"})
+    assert resp.status_code == 200
+    assert resp.get_json()["deleted"] == 0
 
 
 def test_check_all_tracks_failures(client, make_result, _mock_network, monkeypatch):

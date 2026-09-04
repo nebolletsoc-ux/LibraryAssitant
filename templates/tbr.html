@@ -188,6 +188,7 @@
         }
 
         .libraries-btn {
+            position: relative;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -195,8 +196,21 @@
             background: none;
             border: none;
             cursor: pointer;
-            color: #B45309;
+            color: #DC2626;
             padding: 2px;
+        }
+
+        .libraries-btn.on { color: #16A34A; }
+
+        .libraries-badge {
+            position: absolute;
+            top: -1px;
+            right: 2px;
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: #DC2626;
+            border: 1.5px solid #FFFFFF;
         }
 
         .libraries-btn span {
@@ -906,11 +920,25 @@
             font-family: inherit;
         }
 
-        .lib-add-note {
-            padding: 14px 20px;
+.lib-add-note {
+            padding: 16px 20px;
             font-size: 13px;
-            color: #64748B;
+            color: #94A3B8;
         }
+
+        .clear-tbr {
+            display: block;
+            margin: 20px auto 8px;
+            background: none;
+            border: none;
+            color: #94A3B8;
+            font-size: 13px;
+            text-decoration: underline;
+            cursor: pointer;
+            padding: 4px 8px;
+        }
+
+        .clear-tbr:hover { color: #EF4444; }
 
         .lib-available { cursor: pointer; }
         .lib-available:hover { background: #F8FAFC; }
@@ -961,6 +989,7 @@
                         <span id="refresh-label">Refresh</span>
                     </button>
                     <button class="libraries-btn" id="libraries-btn" title="Libraries">
+                        <span class="libraries-badge" id="libraries-badge"></span>
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/></svg>
                         <span>Libraries</span>
                     </button>
@@ -1158,6 +1187,15 @@
             } catch (e) {
                 console.error("Error loading libraries:", e);
             }
+            updateLibraryIndicator();
+        }
+
+        function updateLibraryIndicator() {
+            const btn = document.getElementById("libraries-btn");
+            const badge = document.getElementById("libraries-badge");
+            const on = (libraryConfigs || []).some(l => l.enabled);
+            btn.classList.toggle("on", on);
+            if (badge) badge.style.background = on ? "#16A34A" : "#DC2626";
         }
 
         // ---------- list rendering ----------
@@ -1721,6 +1759,7 @@
                 </div>
                 ${rows}
                 <button class="add-library" id="add-library">+ Add library</button>
+                <button class="clear-tbr" id="clear-tbr">Clear entire reading list</button>
             `;
 
             body.querySelectorAll(".switch").forEach(sw => {
@@ -1731,6 +1770,27 @@
             document.getElementById("add-library").addEventListener("click", () => {
                 librariesView = "add";
                 renderLibraries();
+            });
+            document.getElementById("clear-tbr").addEventListener("click", () => {
+                if (!confirm("Clear your entire reading list? This can\u2019t be undone.")) return;
+                (async () => {
+                    try {
+                        const resp = await fetch(`${API_BASE}/books/clear`, {
+                            method: "DELETE",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ confirm: "clear_all" }),
+                        });
+                        if (!resp.ok) {
+                            const err = await resp.json().catch(() => ({}));
+                            throw new Error(err.error || "Failed to clear list");
+                        }
+                        await loadBooks();
+                        updateLibraryIndicator();
+                        showToast("Reading list cleared");
+                    } catch (e) {
+                        showToast(`Error: ${e.message}`, "error");
+                    }
+                })();
             });
         }
 
