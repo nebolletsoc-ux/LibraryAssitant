@@ -1,10 +1,30 @@
 """Tests for availability checking: single check, check-all, and list summary."""
 
+import time
+
 
 def add(client, title="The Overstory", author="Richard Powers", isbn="9780393635522"):
     resp = client.post("/api/books", json={"title": title, "author": author, "isbn": isbn})
     assert resp.status_code == 201
     return resp.get_json()
+
+
+def start_and_wait_scan(client):
+    """POST check-all (async job), return after the background scan finishes.
+
+    The scan runs on the module-level worker pool, so tests poll the new
+    progress endpoint instead of the old blocking response.
+    """
+    resp = client.post("/api/books/check-all")
+    assert resp.status_code == 202, resp.get_json()
+    job_id = resp.get_json()["job_id"]
+    for _ in range(100):
+        progress = client.get(f"/api/books/scan-progress/{job_id}").get_json()
+        assert progress["id"] == job_id
+        if progress["done"]:
+            return progress
+        time.sleep(0.02)
+    raise AssertionError("scan did not finish in time")
 
 
 def test_check_availability_stores_and_returns_results(client, make_result, _mock_network):
@@ -95,17 +115,15 @@ def enable_default_library(client):
 
 def test_check_all_refreshes_every_tbr_entry(client, make_result, _mock_network):
     enable_default_library(client)
-    book1 = add(client, title="A", isbn="9781111111111")
-    book2 = add(client, title="B", isbn="9782222222222")
+    add(client, title="A", isbn="9781111111111")
+    add(client, title="B", isbn="9782222222222")
 
     _mock_network.append(make_result(library="berkeley", format="eBook", available=True))
 
-    resp = client.post("/api/books/check-all")
-    assert resp.status_code == 200
-    data = resp.get_json()
-    assert data["total"] == 2
-    assert data["checked"] == 2
-    assert data["failures"] == []
+    progress = start_and_wait_scan(client)
+    assert progress["total"] == 2
+    assert progress["checked"] == 2
+    assert progress["failures"] == []
 
     for entry in client.get("/api/books").get_json():
         assert entry["availability_summary"]["checked"] is True
@@ -170,10 +188,8 @@ def test_check_all_tracks_failures(client, make_result, _mock_network, monkeypat
     original_refresh = real_refresh
     monkeypatch.setattr(app_module, "_refresh_availability", flaky_refresh)
 
-    resp = client.post("/api/books/check-all")
-    assert resp.status_code == 200
-    data = resp.get_json()
-    assert data["total"] == 2
-    assert data["checked"] == 1
-    assert len(data["failures"]) == 1
-    assert data["failures"][0]["title"] == "B"
+    progress = start_and_wait_scan(client)
+    assert progress["total"] == 2
+    assert progress["checked"] == 1
+    assert len(progress["failures"]) == 1
+    assert progress["failures"][0]["title"] == "B"
