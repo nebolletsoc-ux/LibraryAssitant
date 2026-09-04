@@ -1531,6 +1531,8 @@
 
         // ---------- refresh ----------
 
+        let scanPollTimer = null;
+
         async function checkAllAvailability() {
             const button = document.getElementById("refresh-btn");
             const label = document.getElementById("refresh-label");
@@ -1538,25 +1540,65 @@
             button.disabled = true;
             label.textContent = "Checking…";
             icon.classList.add("spin");
-            scanStatus("Scanning availability");
+            if (scanPollTimer) clearInterval(scanPollTimer);
 
+            const reset = () => {
+                button.disabled = false;
+                label.textContent = "Refresh";
+                icon.classList.remove("spin");
+                scanStatus("");
+            };
+
+            let job;
             try {
-                await fetch(`${API_BASE}/books/check-all`, { method: "POST" });
+                const resp = await fetch(`${API_BASE}/books/check-all`, { method: "POST" });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok) {
+                    throw new Error(data.error || "Failed to start availability check");
+                }
+                if (data.done) {
+                    reset();
+                    return;
+                }
+                job = data.job_id;
+                scanStatus("Scanning availability");
             } catch (e) {
-                showToast("Availability check failed", "error");
-            } finally {
-                setTimeout(async () => {
-                    button.disabled = false;
-                    label.textContent = "Refresh";
-                    icon.classList.remove("spin");
-                    scanStatus("");
-                    await loadBooks();
-                }, 1500);
+                showToast(`Availability check failed: ${e.message}`, "error");
+                reset();
+                return;
             }
+
+            const startedAt = Date.now();
+            scanPollTimer = setInterval(async () => {
+                try {
+                    const resp = await fetch(`${API_BASE}/books/scan-progress/${job}`);
+                    if (!resp.ok) throw new Error("failed to read progress");
+                    const p = await resp.json();
+                    const sec = Math.round((Date.now() - startedAt) / 1000);
+                    scanStatus(`Scanning ${p.processed} of ${p.total} books`);
+                    if (p.done) {
+                        clearInterval(scanPollTimer);
+                        scanPollTimer = null;
+                        reset();
+                        await loadBooks();
+                        if (p.failures && p.failures.length) {
+                            showToast(`${p.checked} checked \u00b7 ${p.failures.length} failed`, "error");
+                        } else {
+                            showToast(`${p.checked} books checked`);
+                        }
+                    }
+                } catch (e) {
+                    clearInterval(scanPollTimer);
+                    scanPollTimer = null;
+                    reset();
+                    showToast("Availability check failed", "error");
+                }
+            }, 2000);
         }
 
         let scanTimer = null;
         let scanStartedAt = null;
+        let scanStatusText = "";
 
         function scanStatus(text) {
             const bar = document.getElementById("status-bar");
@@ -1565,13 +1607,15 @@
                 if (scanTimer) clearInterval(scanTimer);
                 scanTimer = null;
                 scanStartedAt = null;
+                scanStatusText = "";
                 bar.style.display = "none";
                 return;
             }
+            scanStatusText = text;
             if (!scanStartedAt) scanStartedAt = Date.now();
             const render = () => {
                 const sec = Math.round((Date.now() - scanStartedAt) / 1000);
-                el.textContent = `${text} \u00b7 ${sec}s`;
+                el.textContent = `${scanStatusText} \u00b7 ${sec}s`;
             };
             render();
             if (!scanTimer) scanTimer = setInterval(render, 1000);

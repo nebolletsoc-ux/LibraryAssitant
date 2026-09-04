@@ -4,6 +4,7 @@ import json
 import os
 import threading
 import time
+import uuid
 from datetime import datetime, timezone
 
 import requests
@@ -91,6 +92,10 @@ MAX_WORKERS = 8
 JOB_TIMEOUT_SECONDS = 3600  # Clean up jobs after 1 hour
 
 executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
+
+# Single active background scan at a time; protects job progress counters.
+_scan_lock = threading.Lock()
+_active_scan = None
 
 jobs = {}
 
@@ -939,35 +944,89 @@ def _refresh_one_book(user_book_id, configs):
 
 
 @app.route("/api/books/check-all", methods=["POST"])
-def check_all_availability():
-    """Refresh every TBR entry, retaining successful checks if one fails.
+def start_check_all():
+    """Start a background availability scan of every TBR entry.
 
-    Books are scanned concurrently (sharing the module-level pool) so a
-    large list no longer takes tens of minutes serially.
+    Returns immediately with a job id; the scan continues on the shared
+    worker pool and progress is read via GET /api/books/scan-progress/<id>.
+    This keeps the request short so slow scans can't time out mobile or
+    desktop browsers (a full scan can take minutes on real networks).
     """
+    global _active_scan
+
     configs = _library_search_configs()
     if not configs:
         return jsonify({"error": "No libraries configured"}), 400
 
-    user_books = UserBook.query.filter_by(user_id=1, status="tbr").all()
-    if not user_books:
-        return jsonify({"total": 0, "checked": 0, "failures": []}), 200
+    with _scan_lock:
+        if _active_scan and not _active_scan["done"]:
+            return jsonify({
+                "job_id": _active_scan["id"],
+                "total": _active_scan["total"],
+                "already_running": True,
+            }), 202
 
-    futures = [
-        executor.submit(_refresh_one_book, user_book.id, configs)
-        for user_book in user_books
-    ]
-    results = [future.result() for future in futures]
+        user_books = UserBook.query.filter_by(user_id=1, status="tbr").all()
+        if not user_books:
+            return jsonify({"total": 0, "checked": 0, "failures": [], "done": True}), 200
 
-    total = len(user_books)
-    checked = sum(1 for r in results if not r.get("error"))
-    failures = [{"id": r["id"], "title": r["title"]} for r in results if r.get("error")]
+        job = {
+            "id": uuid.uuid4().hex[:12],
+            "total": len(user_books),
+            "processed": 0,
+            "checked": 0,
+            "failures": [],
+            "done": False,
+        }
+        _active_scan = job
 
-    return jsonify({
-        "total": total,
-        "checked": checked,
-        "failures": failures,
-    }), 200
+    scan_ids = [ub.id for ub in user_books]
+    threading.Thread(target=_run_scan, args=(job, scan_ids, configs), daemon=True).start()
+
+    return jsonify({"job_id": job["id"], "total": job["total"], "already_running": False}), 202
+
+
+def _run_scan(job, user_book_ids, configs):
+    """Fan out a scan across the worker pool and track progress on the job.
+
+    Each _refresh_one_book pushes its own app context, so this supervisor
+    thread never touches a scoped session.
+    """
+    try:
+        futures = [
+            executor.submit(_refresh_one_book, user_book_id, configs)
+            for user_book_id in user_book_ids
+        ]
+        for future, user_book_id in zip(futures, user_book_ids):
+            result = None
+            try:
+                result = future.result()
+                if result.get("error"):
+                    with _scan_lock:
+                        job["failures"].append({"id": result["id"], "title": result["title"]})
+            except Exception as e:
+                result = {"error": str(e)}
+                with _scan_lock:
+                    job["failures"].append({"id": user_book_id, "title": None, "error": str(e)})
+            finally:
+                with _scan_lock:
+                    job["processed"] += 1
+                    if not (result or {}).get("error"):
+                        job["checked"] += 1
+    finally:
+        with _scan_lock:
+            job["done"] = True
+
+
+@app.route("/api/books/scan-progress/<job_id>", methods=["GET"])
+def scan_progress(job_id):
+    """Progress of a running/finished availability scan."""
+    with _scan_lock:
+        if not _active_scan or _active_scan["id"] != job_id:
+            return jsonify({"error": "Unknown scan"}), 404
+        snapshot = dict(_active_scan)
+        snapshot["failures"] = list(_active_scan["failures"])
+    return jsonify(snapshot), 200
 
 
 @app.route("/api/books/<int:user_book_id>/availability", methods=["GET"])
