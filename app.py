@@ -31,31 +31,40 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 # Initialize database
 db.init_app(app)
 
-# Shipped library presets. LAPL is the only prepopulated one because its
-# Libby/OverDrive catalog (lapl.overdrive.com) is the largest single
-# public-library selection in the US.
+# Shipped library presets. Only LAPL is auto-added (prepopulated and
+# enabled) on a fresh database; every other library is opt-in and appears
+# in the "Add library" list until the user adds it. Any other OverDrive or
+# Bibliocommons library can be added as a custom entry from that screen.
 LIBRARY_PRESETS = {
     "lapl": {"key": "lapl", "label": "Los Angeles Public Library", "overdrive": "lapl"},
+    "oakland": {"key": "oakland", "label": "Oakland Public Library", "bibliocommons": "oaklandlibrary"},
+    "berkeley": {"key": "berkeley", "label": "Berkeley Public Library", "overdrive": "berkeleypubliclibrary"},
+    "redwood_city": {"key": "redwood_city", "label": "Redwood City Public Library", "bibliocommons": "rcpl"},
+    "hoopla": {"key": "hoopla", "label": "Hoopla", "hoopla": True},
+    "sfpl": {"key": "sfpl", "label": "San Francisco Public Library", "bibliocommons": "sfpl"},
+    "ssfpl": {"key": "ssfpl", "label": "South San Francisco Public Library", "bibliocommons": "ssfpl"},
+    "alameda_county": {"key": "alameda_county", "label": "Alameda County Library", "bibliocommons": "aclibrary"},
+    "contra_costa_county": {"key": "contra_costa_county", "label": "Contra Costa County Library", "bibliocommons": "ccclib"},
 }
 
 # Create all tables on app startup
 with app.app_context():
     db.create_all()
-    
-    # Initialize default library configuration from the shipped presets.
-    if LibraryConfig.query.count() == 0:
-        for key, preset in LIBRARY_PRESETS.items():
-            db.session.add(LibraryConfig(
-                user_id=1,
-                library_key=key,
-                label=preset["label"],
-                bibliocommons=preset.get("bibliocommons"),
-                overdrive=preset.get("overdrive"),
-                hoopla=bool(preset.get("hoopla")),
-                enabled=True,
-            ))
+
+    # Seed the starter library (LAPL) on a fresh database; other presets
+    # remain unconfigured so they are offered in the "Add library" list.
+    if not LibraryConfig.query.filter_by(user_id=1, library_key="lapl").first():
+        db.session.add(LibraryConfig(
+            user_id=1,
+            library_key="lapl",
+            label=LIBRARY_PRESETS["lapl"]["label"],
+            bibliocommons=LIBRARY_PRESETS["lapl"].get("bibliocommons"),
+            overdrive=LIBRARY_PRESETS["lapl"].get("overdrive"),
+            hoopla=bool(LIBRARY_PRESETS["lapl"].get("hoopla")),
+            enabled=True,
+        ))
         db.session.commit()
-        print("✓ Initialized default library configuration")
+        print("✓ Initialized default LAPL library configuration")
 
 
 # Optional shared-password gate. Off by default (no env var set = no prompt,
@@ -1023,7 +1032,11 @@ def available_libraries():
             {
                 "library_key": key,
                 "label": preset["label"],
-                "sub": "Unlimited borrows" if preset.get("hoopla") else "via Libby",
+                "sub": (
+                    "Unlimited borrows" if preset.get("hoopla")
+                    else "Libby / OverDrive" if preset.get("overdrive")
+                    else "Bibliocommons"
+                ),
             }
             for key, preset in LIBRARY_PRESETS.items()
             if key not in existing
