@@ -940,6 +940,35 @@
 
         .clear-tbr:hover { color: #EF4444; }
 
+        .lib-input {
+            display: block;
+            width: calc(100% - 40px);
+            margin: 8px 20px 0;
+            padding: 10px 12px;
+            border: 1px solid #E2E8F0;
+            border-radius: 8px;
+            font-size: 15px;
+            background: #F8FAFC;
+            color: #1E293B;
+            box-sizing: border-box;
+        }
+
+        .lib-input:focus {
+            outline: none;
+            border-color: #94A3B8;
+            background: #FFFFFF;
+        }
+
+        .lib-custom-hint {
+            margin: 6px 20px 0;
+            font-size: 12px;
+        }
+
+        .lib-custom-add {
+            margin: 14px auto 20px;
+            display: block;
+        }
+
         .lib-available { cursor: pointer; }
         .lib-available:hover { background: #F8FAFC; }
 
@@ -1678,8 +1707,17 @@
                         <div class="libraries-title">Add a library</div>
                         <button class="sheet-close" id="libraries-close-inner">&times;</button>
                     </div>
-                    <p class="lib-add-note">Pick a library to add. It will be enabled and searched on the next refresh.</p>
+                    <p class="lib-add-note">Pick a supported library below, or add your own with a Libby/OverDrive or Bibliocommons key.</p>
                     <div id="lib-available-list"><div class="lib-add-note">Loading…</div></div>
+                    <div class="lib-custom">
+                        <p class="lib-add-note">Not listed above? Add your own library:</p>
+                        <input id="custom-key" class="lib-input" placeholder="Library key, e.g. pasadena">
+                        <input id="custom-name" class="lib-input" placeholder="Display name, e.g. Pasadena Public Library">
+                        <input id="custom-overdrive" class="lib-input" placeholder="Libby/OverDrive key (optional), e.g. lapl">
+                        <input id="custom-bib" class="lib-input" placeholder="Bibliocommons key (optional), e.g. sfpl">
+                        <p class="lib-add-note lib-custom-hint">At least one of Libby/OverDrive or Bibliocommons is required.</p>
+                        <button class="add-library lib-custom-add" id="custom-add" type="button">Add library</button>
+                    </div>
                 `;
 
                 document.getElementById("libraries-back").addEventListener("click", () => {
@@ -1695,42 +1733,77 @@
                     const items = await resp.json();
                     if (!items.length) {
                         list.innerHTML = `<p class="lib-add-note">All supported libraries are already added.</p>`;
-                        return;
-                    }
-                    list.innerHTML = items.map(lib => `
-                        <div class="lib-row lib-available" data-key="${escapeHtml(lib.library_key)}">
-                            <div>
-                                <p class="lib-name">${escapeHtml(lib.label)}</p>
-                                <p class="lib-sub">${escapeHtml(lib.sub)}</p>
+                    } else {
+                        list.innerHTML = items.map(lib => `
+                            <div class="lib-row lib-available" data-key="${escapeHtml(lib.library_key)}">
+                                <div>
+                                    <p class="lib-name">${escapeHtml(lib.label)}</p>
+                                    <p class="lib-sub">${escapeHtml(lib.sub)}</p>
+                                </div>
+                                <span class="lib-add-arrow">+</span>
                             </div>
-                            <span class="lib-add-arrow">+</span>
-                        </div>
-                    `).join("");
-                    list.querySelectorAll(".lib-available").forEach(row => {
-                        row.addEventListener("click", async () => {
-                            const key = row.dataset.key;
-                            try {
-                                const resp = await fetch(`${API_BASE}/libraries`, {
-                                    method: "POST",
-                                    headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify({ library_key: key }),
-                                });
-                                if (!resp.ok) {
-                                    const err = await resp.json().catch(() => ({}));
-                                    throw new Error(err.error || "Failed to add library");
+                        `).join("");
+                        list.querySelectorAll(".lib-available").forEach(row => {
+                            row.addEventListener("click", async () => {
+                                const key = row.dataset.key;
+                                try {
+                                    const resp = await fetch(`${API_BASE}/libraries`, {
+                                        method: "POST",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({ library_key: key }),
+                                    });
+                                    if (!resp.ok) {
+                                        const err = await resp.json().catch(() => ({}));
+                                        throw new Error(err.error || "Failed to add library");
+                                    }
+                                    await loadLibraries();
+                                    librariesView = "list";
+                                    renderLibraries();
+                                    showToast("Library added");
+                                } catch (e) {
+                                    showToast(`Error: ${e.message}`, "error");
                                 }
-                                await loadLibraries();
-                                librariesView = "list";
-                                renderLibraries();
-                                showToast("Library added");
-                            } catch (e) {
-                                showToast(`Error: ${e.message}`, "error");
-                            }
+                            });
                         });
-                    });
+                    }
                 } catch (e) {
                     list.innerHTML = `<p class="lib-add-note">Couldn't load libraries.</p>`;
                 }
+
+                document.getElementById("custom-add").addEventListener("click", async () => {
+                    const key = document.getElementById("custom-key").value.trim().toLowerCase().replace(/\s+/g, "-");
+                    const label = document.getElementById("custom-name").value.trim();
+                    const overdrive = document.getElementById("custom-overdrive").value.trim().toLowerCase();
+                    const bib = document.getElementById("custom-bib").value.trim().toLowerCase();
+                    if (!key || !label) {
+                        showToast("Enter a library key and display name", "error");
+                        return;
+                    }
+                    if (!overdrive && !bib) {
+                        showToast("Enter a Libby/OverDrive or Bibliocommons key", "error");
+                        return;
+                    }
+                    const payload = { library_key: key, label };
+                    if (overdrive) payload.overdrive = overdrive;
+                    if (bib) payload.bibliocommons = bib;
+                    try {
+                        const resp = await fetch(`${API_BASE}/libraries`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(payload),
+                        });
+                        if (!resp.ok) {
+                            const err = await resp.json().catch(() => ({}));
+                            throw new Error(err.error || "Failed to add library");
+                        }
+                        await loadLibraries();
+                        librariesView = "list";
+                        renderLibraries();
+                        showToast("Library added");
+                    } catch (e) {
+                        showToast(`Error: ${e.message}`, "error");
+                    }
+                });
                 return;
             }
 

@@ -6,8 +6,11 @@ def test_get_libraries_returns_defaults(client):
     assert resp.status_code == 200
     data = resp.get_json()
     keys = [lib["library_key"] for lib in data]
-    # LAPL is the only prepopulated library.
-    assert keys == ["lapl"]
+    # Every preset ships in seed order; LAPL first, the rest opt-in.
+    assert keys == [
+        "lapl", "oakland", "berkeley", "redwood_city", "hoopla",
+        "sfpl", "ssfpl", "alameda_county", "contra_costa_county",
+    ]
     assert data[0]["label"] == "Los Angeles Public Library"
     # Defaults are all disabled in fixtures.
     assert all(lib["enabled"] is False for lib in data)
@@ -57,6 +60,21 @@ def test_update_with_no_body_keeps_current(client):
 
 # ---------- add library (POST /api/libraries) ----------
 
+def test_add_preset_library_from_available(client, app_context):
+    from models import LibraryConfig, db
+
+    with app_context.app.app_context():
+        LibraryConfig.query.filter_by(user_id=1, library_key="oakland").delete()
+        db.session.commit()
+
+    resp = client.post("/api/libraries", json={"library_key": "oakland"})
+    assert resp.status_code == 201
+    data = resp.get_json()
+    assert data["label"] == "Oakland Public Library"
+    assert data["bibliocommons"] == "oaklandlibrary"
+    assert data["enabled"] is True
+
+
 def test_add_preset_already_configured_returns_409(client):
     resp = client.post("/api/libraries", json={"library_key": "lapl"})
     assert resp.status_code == 409
@@ -104,27 +122,19 @@ def test_available_libraries_are_presets_not_configured(client):
         assert "library_key" in lib and "label" in lib
 
 
-def test_available_libraries_present_when_lapl_not_configured(client, app_context):
+def test_available_libraries_empty_when_all_seeded(client):
+    # conftest configures every preset, so nothing is left to add.
+    assert client.get("/api/libraries/available").get_json() == []
+
+
+def test_available_libraries_show_only_unconfigured_presets(client, app_context):
     from models import LibraryConfig, db
 
     with app_context.app.app_context():
-        LibraryConfig.query.filter_by(user_id=1).delete()
+        LibraryConfig.query.filter_by(user_id=1, library_key="oakland").delete()
         db.session.commit()
 
-    data = client.get("/api/libraries/available").get_json()
-    keys = [lib["library_key"] for lib in data]
-    assert "lapl" in keys
-    assert next(lib for lib in data if lib["library_key"] == "lapl")["label"] == "Los Angeles Public Library"
-
-
-def test_available_libraries_empty_when_all_seeded(client, app_context):
-    from models import LibraryConfig, db
-
-    with app_context.app.app_context():
-        for config in LibraryConfig.query.filter_by(user_id=1).all():
-            if config.library_key != "lapl":
-                db.session.delete(config)
-        db.session.commit()
-
-    data = client.get("/api/libraries/available").get_json()
-    assert data == []
+    keys = [lib["library_key"] for lib in client.get("/api/libraries/available").get_json()]
+    assert "oakland" in keys
+    assert "lapl" not in keys      # still configured
+    assert "sfpl" not in keys      # still configured
