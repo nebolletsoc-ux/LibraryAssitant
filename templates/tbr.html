@@ -1715,7 +1715,7 @@
                         <input id="custom-name" class="lib-input" placeholder="Display name, e.g. Pasadena Public Library">
                         <input id="custom-overdrive" class="lib-input" placeholder="Libby/OverDrive key (optional), e.g. lapl">
                         <input id="custom-bib" class="lib-input" placeholder="Bibliocommons key (optional), e.g. sfpl">
-                        <p class="lib-add-note lib-custom-hint">At least one of Libby/OverDrive or Bibliocommons is required.</p>
+                        <p class="lib-add-note lib-custom-hint">No key is needed — a library without a catalog key just won\u2019t be searched.</p>
                         <button class="add-library lib-custom-add" id="custom-add" type="button">Add library</button>
                     </div>
                 `;
@@ -1779,10 +1779,6 @@
                         showToast("Enter a library key and display name", "error");
                         return;
                     }
-                    if (!overdrive && !bib) {
-                        showToast("Enter a Libby/OverDrive or Bibliocommons key", "error");
-                        return;
-                    }
                     const payload = { library_key: key, label };
                     if (overdrive) payload.overdrive = overdrive;
                     if (bib) payload.bibliocommons = bib;
@@ -1808,7 +1804,10 @@
             }
 
             const rows = libraryConfigs.map(lib => {
-                const sub = lib.library_key === "hoopla" ? "Unlimited borrows" : "via Libby";
+                const sub = lib.hoopla ? "Unlimited borrows"
+                    : lib.overdrive ? "Libby / OverDrive"
+                    : lib.bibliocommons ? "Bibliocommons"
+                    : "No online catalog key";
                 return `
                     <div class="lib-row">
                         <div>
