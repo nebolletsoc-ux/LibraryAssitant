@@ -31,10 +31,10 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 # Initialize database
 db.init_app(app)
 
-# Shipped library presets. Only LAPL is auto-added (prepopulated and
-# enabled) on a fresh database; every other library is opt-in and appears
-# in the "Add library" list until the user adds it. Any other OverDrive or
-# Bibliocommons library can be added as a custom entry from that screen.
+# Shipped library presets. No library is auto-added or enabled: the app
+# starts with an empty configuration and the Add-library screen offers
+# these as opt-in choices (plus a custom-library form). This matches the
+# "start with no libraries selected" default state.
 LIBRARY_PRESETS = {
     "lapl": {"key": "lapl", "label": "Los Angeles Public Library", "overdrive": "lapl"},
     "oakland": {"key": "oakland", "label": "Oakland Public Library", "bibliocommons": "oaklandlibrary"},
@@ -51,20 +51,8 @@ LIBRARY_PRESETS = {
 with app.app_context():
     db.create_all()
 
-    # Seed the starter library (LAPL) on a fresh database; other presets
-    # remain unconfigured so they are offered in the "Add library" list.
-    if not LibraryConfig.query.filter_by(user_id=1, library_key="lapl").first():
-        db.session.add(LibraryConfig(
-            user_id=1,
-            library_key="lapl",
-            label=LIBRARY_PRESETS["lapl"]["label"],
-            bibliocommons=LIBRARY_PRESETS["lapl"].get("bibliocommons"),
-            overdrive=LIBRARY_PRESETS["lapl"].get("overdrive"),
-            hoopla=bool(LIBRARY_PRESETS["lapl"].get("hoopla")),
-            enabled=True,
-        ))
-        db.session.commit()
-        print("✓ Initialized default LAPL library configuration")
+    # No libraries are seeded by default — the app starts with an empty
+    # configuration (see LIBRARY_PRESETS above). Nothing to initialize.
 
 
 # Optional shared-password gate. Off by default (no env var set = no prompt,
@@ -1083,6 +1071,7 @@ def add_library():
     Preset: {"library_key": "sfpl"}
     Custom: {"library_key": "my_lib", "label": "...", "bibliocommons": "subdomain"}
             or {"library_key": "my_lib", "label": "...", "overdrive": "subdomain"}
+            or {"library_key": "my_lib", "label": "..."}  # label only; not searched
     """
     try:
         data = request.get_json() or {}
@@ -1107,8 +1096,7 @@ def add_library():
             bibliocommons = (data.get("bibliocommons") or "").strip() or None
             overdrive = (data.get("overdrive") or "").strip() or None
             hoopla = bool(data.get("hoopla"))
-            if not bibliocommons and not overdrive and not hoopla:
-                return jsonify({"error": "A custom library needs bibliocommons, overdrive, or hoopla"}), 400
+            # A label-only custom library is allowed (it just isn't searched).
 
         new_library = LibraryConfig(
             user_id=1,

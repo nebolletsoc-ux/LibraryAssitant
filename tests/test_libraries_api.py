@@ -94,9 +94,16 @@ def test_add_custom_overdrive_library(client):
     assert data["enabled"] is True
 
 
-def test_add_custom_library_without_connection_returns_400(client):
+def test_add_custom_library_without_connection_succeeds(client):
+    # Label-only custom libraries are allowed; they just aren't searched.
     resp = client.post("/api/libraries", json={"library_key": "x", "label": "X"})
-    assert resp.status_code == 400
+    assert resp.status_code == 201
+    data = resp.get_json()
+    assert data["label"] == "X"
+    assert data["enabled"] is True
+    assert data["overdrive"] is None
+    assert data["bibliocommons"] is None
+    assert data["hoopla"] is False
 
 
 def test_add_custom_library_requires_key(client):
