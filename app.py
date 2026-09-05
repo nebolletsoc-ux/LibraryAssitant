@@ -12,6 +12,7 @@ from requests import RequestException
 from concurrent.futures import ThreadPoolExecutor
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for
+from sqlalchemy.orm import joinedload
 
 from models import db, Book, UserBook, Availability, LibraryConfig
 from library.isbn import find_isbn
@@ -567,7 +568,17 @@ def list_books():
     Returns list of UserBook entries with full book data.
     """
     try:
-        user_books = UserBook.query.filter_by(user_id=1, status="tbr").all()
+        user_books = (
+            UserBook.query.options(
+                joinedload(UserBook.book).joinedload(Book.availability)
+            )
+            .filter_by(user_id=1, status="tbr")
+            .all()
+        )
+        enabled_keys = {
+            lib.library_key
+            for lib in LibraryConfig.query.filter_by(user_id=1, enabled=True).all()
+        }
         books = []
         for user_book in user_books:
             book_data = user_book.to_dict_with_book()
@@ -575,6 +586,10 @@ def list_books():
 
             # Full cached rows for the frontend's borrow-options/status model:
             # one entry per library/provider/format with holds and wait info.
+            # Only include libraries that are currently enabled so deselecting
+            # a library hides its (possibly stale) cached results immediately.
+            if enabled_keys:
+                availability = [a for a in availability if a.library in enabled_keys]
             book_data["availability"] = [result.to_dict() for result in availability]
 
             # Per-format summary used by the list-view filters and icon dots.
@@ -681,6 +696,27 @@ def search_books():
         return jsonify({"error": "Search failed"}), 500
 
 
+def _find_existing_book(title, author, isbn):
+    """Return an existing Book to reuse, preferring exact ISBN then title+author.
+
+    Editions of the same work (different ISBNs, or a synthetic ISBN from a
+    no-ISBN add) would otherwise create duplicate Book rows for one title,
+    which shows up as duplicate lines in the TBR list.
+    """
+    if isbn:
+        book = Book.query.filter_by(isbn=isbn).first()
+        if book:
+            return book
+    t = (title or "").strip().lower()
+    a = (author or "").strip().lower()
+    if not t:
+        return None
+    q = Book.query.filter(db.func.lower(Book.title) == t)
+    if a:
+        q = q.filter(db.func.lower(Book.author) == a)
+    return q.first()
+
+
 @app.route("/api/books", methods=["POST"])
 def add_book():
     """
@@ -720,9 +756,10 @@ def add_book():
             isbn = f"synthetic-{hashlib.md5(hash_input.encode()).hexdigest()[:12]}"
     
     try:
-        # Check if book already exists
-        book = Book.query.filter_by(isbn=isbn).first()
-        
+        # Reuse an existing book (same ISBN, or same title+author) instead of
+        # minting a new Book row per edition.
+        book = _find_existing_book(title, author, isbn)
+
         if not book:
             # Create new book record
             book = Book(
@@ -825,7 +862,7 @@ def import_tbr_csv():
                 hash_input = f"{title}|{author}"
                 isbn = f"synthetic-{hashlib.md5(hash_input.encode()).hexdigest()[:12]}"
 
-            book = Book.query.filter_by(isbn=isbn).first()
+            book = _find_existing_book(title, author, isbn)
             if not book:
                 book = Book(
                     isbn=isbn,
@@ -1014,6 +1051,21 @@ def start_check_all():
                 "total": _active_scan["total"],
                 "already_running": True,
             }), 202
+
+        # Drop cached results for libraries that are no longer enabled, so a
+        # deselected library's stale availability can't resurface.
+        enabled_keys = {c["key"] for c in configs}
+        stale_libraries = {
+            key
+            for (key,) in db.session.query(Availability.library).distinct()
+            if key not in enabled_keys
+        }
+        for key in stale_libraries:
+            Availability.query.filter_by(library=key).delete(
+                synchronize_session=False
+            )
+        if stale_libraries:
+            db.session.commit()
 
         user_books = UserBook.query.filter_by(user_id=1, status="tbr").all()
         if not user_books:
