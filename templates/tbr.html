@@ -343,16 +343,12 @@
 
         .available-filter:hover { border-color: #CBD5E1; color: #334155; }
 
-        .available-filter.active {
-            border-color: #16A34A;
-            color: #16A34A;
-        }
+        .available-filter.active { border-color: #16A34A; color: #16A34A; }
         .available-filter.active svg { stroke-width: 2.75; }
-        .available-filter.active .available-count { display: none; }
 
         .available-count {
-            background: #DCFCE7;
-            color: #15803D;
+            background: #FEF08A;
+            color: #854D0E;
             font-size: 10px;
             font-weight: 700;
             padding: 0 8px;
@@ -361,6 +357,11 @@
             tabular-nums: tabular-nums;
             font-variant-numeric: tabular-nums;
             flex-shrink: 0;
+        }
+
+        .available-filter.active .available-count {
+            background: #DCFCE7;
+            color: #15803D;
         }
 
         /* ---------- Sort dropdown ---------- */
@@ -1221,11 +1222,17 @@
 
         // ---------- list rendering ----------
 
+        function updateAvailableBadge() {
+            const el = document.getElementById("available-count");
+            const filter = document.getElementById("available-filter");
+            el.textContent = filter.classList.contains("active") ? availableCount() : allBooks.length;
+        }
+
         function renderBooks() {
             const container = document.getElementById("books-container");
             const rows = filteredBooks();
 
-            document.getElementById("available-count").textContent = availableCount();
+            updateAvailableBadge();
 
             const checkedEl = document.getElementById("checked-count");
             if (checkedEl) {
