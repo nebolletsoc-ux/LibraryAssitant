@@ -59,6 +59,12 @@
             color: #1C1917;
         }
 
+        .app-logo {
+            height: 44px;
+            width: auto;
+            display: block;
+        }
+
         .header-actions {
             display: flex;
             align-items: center;
@@ -999,7 +1005,7 @@
     <div id="app">
         <header class="app-header">
             <div class="header-row">
-                <h1 class="app-title h-serif">MyNextRead</h1>
+                <img class="app-logo" src="{{ url_for('static', filename='owl icon.PNG') }}" alt="MyNextRead" width="40" height="46">
                 <div class="header-actions">
                     <button class="pill-btn" id="import-btn" title="Import reading list">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
