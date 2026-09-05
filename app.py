@@ -20,14 +20,41 @@ from library.oakland import search_libraries
 
 app = Flask(__name__)
 
+def _normalize_database_url(raw):
+    """Normalize a DATABASE_URL for SQLAlchemy.
+
+    Accepts bare "postgres://" (common in go/env hosting) and converts it to
+    the "postgresql+psycopg2://" scheme. Returns None when unset so callers
+    keep their SQLite fallback.
+    """
+    url = (raw or "").strip()
+    if not url:
+        return None
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+psycopg2://", 1)
+    elif url.startswith("postgresql://") and "+psycopg2" not in url:
+        url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    return url
+
+
 # Database configuration
-database_url = os.environ.get("DATABASE_URL", "sqlite:///library_assistant.db")
-app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+#
+# Set DATABASE_URL to a persistent database (e.g. a hosted Postgres from
+# Neon/Supabase) so the list survives restarts and redeploys. Without it we
+# fall back to the local SQLite file in the instance folder, which is
+# ephemeral on Render's free tier (wiped on every deploy/restart).
+database_url = _normalize_database_url(os.environ.get("DATABASE_URL"))
+if database_url:
+    app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+    # Postgres: recycle long-lived pooled connections and re-check them.
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_recycle": 300}
+else:
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///library_assistant.db"
+    # Allow concurrent scan threads to wait out SQLite write locks.
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+        "connect_args": {"timeout": 30},
+    }
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-# Allow concurrent scan threads to wait out SQLite write locks.
-app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-    "connect_args": {"timeout": 30},
-}
 
 # Initialize database
 db.init_app(app)
