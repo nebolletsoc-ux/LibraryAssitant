@@ -21,7 +21,7 @@ class Book(db.Model):
     __tablename__ = "books"
     
     id = db.Column(db.Integer, primary_key=True)
-    isbn = db.Column(db.String(20), unique=True, nullable=False, index=True)
+    isbn = db.Column(db.String(64), unique=True, nullable=False, index=True)
     title = db.Column(db.String(500), nullable=False)
     author = db.Column(db.String(500), nullable=False)
     cover_url = db.Column(db.String(1000), nullable=True)
