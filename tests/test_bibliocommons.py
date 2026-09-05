@@ -264,6 +264,86 @@ def test_search_bibliocommons_combines_catalog_and_hoopla(monkeypatch):
     assert hoopla_rows[0].available is True
 
 
+def test_query_variants_strip_series_and_subtitles():
+    from library.oakland import (
+        _split_main_title,
+        _author_head,
+        _catalog_query_variants,
+    )
+
+    assert _split_main_title(
+        "Crook Manifesto (The Harlem Trilogy, #2)"
+    ) == "Crook Manifesto"
+    assert _split_main_title(
+        "Factfulness: Ten Reasons We're Wrong About the World"
+    ) == "Factfulness"
+    assert _split_main_title(
+        "An Army at Dawn: The War in North Africa, 1942-1943"
+    ) == "An Army at Dawn"
+    assert _author_head("Grann, David") == "Grann"
+    assert _author_head("David Grann") == "Grann"
+
+    variants = _catalog_query_variants(
+        "Crook Manifesto (The Harlem Trilogy, #2)",
+        "Colson Whitehead",
+    )
+    assert variants[0] == "Crook Manifesto (The Harlem Trilogy, #2) Colson Whitehead"
+    assert "Crook Manifesto Whitehead" in variants
+
+
+def test_search_bibliocommons_falls_back_to_cleaned_query(monkeypatch):
+    """When the full title+author query returns an empty results page,
+    the search must retry with a cleaned (series/punctuation-stripped)
+    query and still match the requested work strictly."""
+    from library.oakland import search_bibliocommons
+
+    empty_page = '<html><body>results list is empty</body></html>'
+    good_page = _page([
+        _item(
+            "Crook Manifesto",
+            "Whitehead, Colson",
+            [
+                _manifestation(
+                    "/v2/record/SBOOK3", "Book, 2023", "book",
+                    "available", "Available",
+                )
+            ],
+        )
+    ])
+
+    hits = []
+
+    class _FakeResponse:
+        status_code = 200
+        text = empty_page
+
+    def fake_get(url, **kwargs):
+        query = kwargs.get("params", {}).get("query", "")
+        hits.append(query)
+        r = _FakeResponse()
+        if " (The Harlem Trilogy" not in query and "(The Harlem Trilogy" not in query:
+            r.text = good_page
+        return r
+
+    monkeypatch.setattr(
+        "library.oakland.requests.get",
+        fake_get,
+    )
+
+    results = search_bibliocommons(
+        "oaklandlibrary", "oakland",
+        "Crook Manifesto (The Harlem Trilogy, #2)", "Colson Whitehead",
+    )
+
+    assert len(results) == 1
+    assert results[0].library == "oakland"
+    assert results[0].format == "Book"
+    assert results[0].available is True
+
+    # The cleaned variant was tried after the initial full query.
+    assert "Crook Manifesto Whitehead" in hits
+
+
 def test_search_oakland_uses_catalog_and_hoopla(monkeypatch):
     from library.oakland import search_oakland
 

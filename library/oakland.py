@@ -1397,7 +1397,83 @@ def search_oakland(
 #
 # Oakland and Berkeley are themselves just presets of these generic
 # functions. Any library running the same catalog software works too.
+#
+# Bibliocommons "smart" search is brittle about punctuation: a query
+# containing parenthetical series info, sub-series numbers, or a long
+# subtitle after a colon frequently returns "Nothing found" even though
+# the book is in the catalog. We therefore fall back through cleaned
+# query variants while still matching results strictly against the full
+# original title/author.
 # ----------------------------------------------------------------------
+
+def _split_main_title(title):
+    """
+    Reduce a title to its searchable main title: drop parenthetical /
+    bracketed series info and anything after the first colon or dash.
+    """
+    stripped = re.sub(
+        r"[\(\[{].*?[\)\]}]",
+        " ",
+        title or "",
+    )
+
+    stripped = re.split(
+        r"[:—–]",
+        stripped,
+        maxsplit=1,
+    )[0]
+
+    tokens = [
+        token
+        for token in stripped.split()
+        if token
+        and re.search(r"[A-Za-z0-9]", token)
+    ]
+
+    return " ".join(tokens[:6])
+
+
+def _author_head(author):
+    """
+    Return the author's distinguishing name token ("Grann, David" ->
+    "Grann"; "David Grann" -> "Grann").
+    """
+    if not author:
+        return ""
+
+    raw = author.strip()
+
+    if "," in raw:
+        first = raw.split(",")[0].strip()
+        return first.split()[0] if first else ""
+
+    parts = [p for p in re.split(r"\s+", raw) if p]
+    return parts[-1] if parts else ""
+
+
+def _catalog_query_variants(title, author):
+    """Ordered query candidates for a Bibliocommons search."""
+    full = f"{title} {author}".strip()
+    main = _split_main_title(title)
+    head = _author_head(author)
+
+    candidates = [
+        full,
+        f"{main} {head}".strip(),
+        f"{main} {author}".strip(),
+        f"{title} {head}".strip(),
+    ]
+
+    unique = []
+
+    for candidate in candidates:
+        candidate = re.sub(r"\s+", " ", candidate or "").strip()
+
+        if candidate and candidate not in unique:
+            unique.append(candidate)
+
+    return unique
+
 
 def search_bibliocommons(subdomain, library_key, title, author, timeout=15):
     """Search a Bibliocommons-powered catalog (same platform as Oakland)."""
@@ -1405,31 +1481,44 @@ def search_bibliocommons(subdomain, library_key, title, author, timeout=15):
         print(f"Bibliocommons ERROR: invalid subdomain '{subdomain}'")
         return []
 
-    query = f"{title} {author}".strip()
     catalog_url = f"https://{subdomain}.bibliocommons.com/v2/search"
 
-    try:
-        response = requests.get(
-            catalog_url,
-            params={"query": query, "searchType": "smart"},
-            headers=HEADERS,
-            timeout=timeout,
+    for query in _catalog_query_variants(title, author):
+
+        try:
+            response = requests.get(
+                catalog_url,
+                params={"query": query, "searchType": "smart"},
+                headers=HEADERS,
+                timeout=timeout,
+            )
+            print(f"{library_key} catalog: {response.status_code} {len(response.text)} bytes")
+        except Exception as error:
+            print(f"{library_key} catalog ERROR: {error}")
+            return []
+
+        if response.status_code >= 400:
+            continue
+
+        results = _search_bibliocommons_page(
+            response.text,
+            subdomain,
+            library_key,
+            title,
+            author,
         )
-        print(f"{library_key} catalog: {response.status_code} {len(response.text)} bytes")
-    except Exception as error:
-        print(f"{library_key} catalog ERROR: {error}")
-        return []
 
-    if response.status_code >= 400:
-        return []
+        # Strict matching means a matched result is authoritative; a
+        # results page full of unrelated titles should not end the search.
+        if results:
+            return results
 
-    return _search_bibliocommons_page(
-        response.text,
-        subdomain,
-        library_key,
-        title,
-        author,
+    print(
+        "Bibliocommons: "
+        f"no results for {title} at {subdomain}"
     )
+
+    return []
 
 
 def search_overdrive_libby(subdomain, library_key, title, author, timeout=15):
