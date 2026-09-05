@@ -90,6 +90,19 @@ with app.app_context():
 APP_PASSWORD = os.environ.get("APP_PASSWORD")
 
 
+@app.after_request
+def no_cache(response):
+    """Never let browsers/caches serve a stale page or stale bundles.
+
+    The UI (templates/tbr.html) is the whole frontend and changes every
+    revision, and the API data is constantly refreshed, so any HTTP cache -
+    especially mobile Safari's heuristic caching - can leave users running
+    an old bundle (this caused "Recheck does nothing" reports).
+    """
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 @app.before_request
 def require_password():
     if not APP_PASSWORD:
