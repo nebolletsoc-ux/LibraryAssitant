@@ -1051,46 +1051,346 @@ def _extract_oakland_hoopla(
     return results
 
 
+def _catalog_format(label, icon):
+    """
+    Map a Bibliocommons format label/icon to a compact format name.
+
+    Bibliocommons presents formats through the per-manifestation label
+    (e.g. "eAudiobook, 2019") and an icon class (e.g. icon-svg-ebook).
+    """
+    text = f"{label} {icon}".lower()
+
+    if "audiobook" in text or "audio book" in text:
+        return "Audiobook"
+
+    if "ebook" in text or "e-book" in text:
+        return "eBook"
+
+    for key, format_name in (
+        ("music", "Music"),
+        ("dvd", "Video"),
+        ("video", "Video"),
+        ("bluray", "Video"),
+        ("book", "Book"),
+        ("magazine", "Periodical"),
+        ("newspaper", "Periodical"),
+        ("score", "Score"),
+        ("map", "Map"),
+    ):
+        if key in text:
+            return format_name
+
+    stripped = (label or "").strip()
+    return stripped or "Digital"
+
+
+def _catalog_availability(wrap_class, text, holds):
+    """
+    Decide availability for one Bibliocommons manifestation.
+
+    The wrap class (available/unavailable) is the primary signal; the
+    surrounding text refines it for transient states and Hoopla links.
+    """
+    lowered = (text or "").lower()
+
+    # Hoopla entries linked from the catalog are instantly borrowable.
+    if "check out now on hoopla" in lowered:
+        return True, None
+
+    if "all copies in use" in lowered:
+        copies = re.search(r"on\s+(\d+)\s+cop", lowered)
+
+        if holds and copies:
+            return False, (
+                f"All copies in use "
+                f"({holds} holds / {copies.group(1)} copies)"
+            )
+
+        return False, "All copies in use"
+
+    if any(
+        phrase in lowered
+        for phrase in (
+            "in transit",
+            "on order",
+            "checked out",
+            "lost or missing",
+            "processing",
+        )
+    ):
+        return False, "Not currently available"
+
+    if wrap_class == "available":
+        return True, None
+
+    return False, "Hold required"
+
+
+def _extract_bibliocommons_results(
+    html,
+    subdomain,
+    library_key,
+    title,
+    author,
+):
+    """
+    Parse a Bibliocommons search results page into library results.
+
+    Each search result item maps to a record with one or more
+    manifestations (Book, eBook, Audiobook, ...). We return one result
+    per manifestation so an eBook and its physical copy are kept
+    distinct, tagged with the requested library key.
+
+    Hoopla links embedded in the page are intentionally NOT handled here;
+    _extract_oakland_hoopla owns those (they are tagged library="hoopla"
+    because Hoopla is a shared catalog).
+    """
+
+    base_url = f"https://{subdomain}.bibliocommons.com"
+
+    items = re.split(
+        r'<li class="row cp-search-result-item"',
+        html,
+    )[1:]
+
+    if not items:
+        return []
+
+    results = []
+    seen = set()
+
+    for raw in items:
+
+        title_match = re.search(
+            r'title-content">([^<]+)</span>',
+            raw,
+        )
+
+        item_title = (
+            title_match.group(1).strip()
+            if title_match
+            else ""
+        )
+
+        combined = re.sub(
+            r"\s+",
+            " ",
+            re.sub(r"<[^>]+>", " ", raw),
+        )
+
+        # Mirror the Libby path: the result's own title must match the
+        # requested work, not just some string occurring on the page.
+        if item_title and not title_matches(
+            item_title,
+            title,
+            author,
+        ):
+            continue
+
+        if not title_matches(
+            combined,
+            title,
+            author,
+        ):
+            continue
+
+        author_links = re.findall(
+            r'class="author-link"[^>]*>\s*(?:<[^>]+>)*([^<]+)<',
+            raw,
+        )
+
+        author_text = " ".join(
+            a.strip()
+            for a in author_links
+            if a.strip()
+        )
+
+        fallback_url = re.search(
+            r'href="(/v2/record/[A-Za-z0-9_-]+)"',
+            raw,
+        )
+
+        fallback_url = (
+            base_url + fallback_url.group(1)
+            if fallback_url
+            else None
+        )
+
+        blocks = re.split(
+            r'<div class="manifestation-item cp-manifestation-list-item',
+            raw,
+        )[1:]
+
+        if not blocks:
+            # Some records have no per-manifestation blocks; still surface
+            # the record itself if its title matched.
+            blocks = [""]
+
+        for block in blocks:
+
+            manifest_url = re.search(
+                r'href="(/v2/record/[A-Za-z0-9_-]+)"',
+                block,
+            )
+
+            url = (
+                base_url + manifest_url.group(1)
+                if manifest_url
+                else fallback_url
+            )
+
+            if not url:
+                continue
+
+            url = clean_url(url)
+
+            label = re.search(
+                r'display-info-primary">([^<]+)',
+                block,
+            )
+
+            format_label = (
+                label.group(1).split(",")[0].strip()
+                if label
+                else ""
+            )
+
+            icon = re.search(
+                r'icon-svg-([a-z0-9-]+) icon"',
+                block,
+            )
+
+            format_name = _catalog_format(
+                format_label,
+                icon.group(1)
+                if icon
+                else "",
+            )
+
+            wrap = re.search(
+                r"manifestation-item-format-call-wrap\s+([a-z]+)",
+                block,
+            )
+
+            avail_block = re.search(
+                r'manifestation-item-availability-block-wrap">(.*?)</div>',
+                block,
+                re.S,
+            )
+
+            avail_text = re.sub(
+                r"\s+",
+                " ",
+                re.sub(
+                    r"<[^>]+>",
+                    " ",
+                    avail_block.group(1)
+                    if avail_block
+                    else "",
+                ),
+            ).strip()
+
+            holds = _extract_holds(avail_text)
+
+            available, wait = _catalog_availability(
+                wrap.group(1)
+                if wrap
+                else "",
+                avail_text,
+                holds,
+            )
+
+            _, wait_weeks = _extract_wait(avail_text)
+
+            key = (url, format_name)
+
+            if key in seen:
+                continue
+
+            seen.add(key)
+
+            print(
+                "Bibliocommons MATCH:",
+                item_title or title,
+                "/",
+                format_name,
+                "/",
+                "AVAILABLE" if available
+                else wait or "STATUS UNKNOWN",
+            )
+
+            results.append(
+                result(
+                    library=library_key,
+                    provider="Catalog",
+                    format_name=format_name,
+                    available=available,
+                    wait=wait,
+                    url=url,
+                    holds=holds,
+                    wait_weeks=wait_weeks,
+                )
+            )
+
+    if not results:
+        print(
+            "Bibliocommons: "
+            f"no specific match for {title}"
+        )
+
+    return results
+
+
+def _search_bibliocommons_page(
+    html,
+    subdomain,
+    library_key,
+    title,
+    author,
+):
+    """
+    Combine the two result sources on a Bibliocommons results page:
+
+    - the catalog's own manifestations (Book/eBook/Audiobook/...),
+      tagged with the requested library key
+    - any Hoopla links the page exposes, tagged library="hoopla"
+    """
+
+    return (
+        _extract_bibliocommons_results(
+            html,
+            subdomain,
+            library_key,
+            title,
+            author,
+        )
+        + _extract_oakland_hoopla(
+            html,
+            title,
+            author,
+        )
+    )
+
+
 def search_oakland(
     title,
     author,
     timeout=15,
 ):
-    query = f"{title} {author}".strip()
+    """
+    Search the Oakland Public Library catalog.
 
-    try:
+    Returns the catalog's own manifestations tagged library="oakland"
+    plus any Hoopla links exposed through the page (library="hoopla",
+    matching Hoopla's shared-catalog semantics).
+    """
 
-        response = requests.get(
-            OAKLAND_CATALOG_URL,
-            params={
-                "query": query,
-                "searchType": "smart",
-            },
-            headers=HEADERS,
-            timeout=timeout,
-        )
-
-        print(
-            f"oakland catalog: "
-            f"{response.status_code} "
-            f"{len(response.text)} bytes"
-        )
-
-    except Exception as error:
-
-        print(
-            f"Oakland ERROR: {error}"
-        )
-
-        return []
-
-    if response.status_code >= 400:
-        return []
-
-    return _extract_oakland_hoopla(
-        response.text,
+    return search_bibliocommons(
+        "oaklandlibrary",
+        "oakland",
         title,
         author,
+        timeout=timeout,
     )
 
 
@@ -1125,23 +1425,13 @@ def search_bibliocommons(subdomain, library_key, title, author, timeout=15):
     if response.status_code >= 400:
         return []
 
-    results = _extract_oakland_hoopla(response.text, title, author)
-
-    # Retag non-Hoopla results with the requested library key.
-    # Hoopla results already have library="hoopla" and should not be changed.
-    return [
-        result(
-            library=r.library if r.provider == "Hoopla" else library_key,
-            provider=r.provider,
-            format_name=r.format,
-            available=r.available,
-            wait=r.wait,
-            url=r.url,
-            holds=r.holds,
-            wait_weeks=r.wait_weeks,
-        )
-        for r in results
-    ]
+    return _search_bibliocommons_page(
+        response.text,
+        subdomain,
+        library_key,
+        title,
+        author,
+    )
 
 
 def search_overdrive_libby(subdomain, library_key, title, author, timeout=15):
