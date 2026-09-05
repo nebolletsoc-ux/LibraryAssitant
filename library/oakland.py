@@ -1178,15 +1178,13 @@ def _extract_bibliocommons_results(
             re.sub(r"<[^>]+>", " ", raw),
         )
 
-        # Mirror the Libby path: the result's own title must match the
-        # requested work, not just some string occurring on the page.
-        if item_title and not title_matches(
-            item_title,
-            title,
-            author,
-        ):
-            continue
-
+        # Match against the full item text: Bibliocommons renders the
+        # short main title ("The Wager") as the item title while the rest
+        # of the record ("... A Tale of Shipwreck, Mutiny and Murder")
+        # appears in the manifestation text, so an item-title-only check
+        # would miss valid matches. The combined-text check below still
+        # rejects unrelated records (they need the wanted phrase or
+        # >= 2 significant tokens to match).
         if not title_matches(
             combined,
             title,

@@ -6,7 +6,7 @@ fixture HTML through a stubbed requests.get so these run offline.
 """
 
 
-def _item(title, author, manifestations, hoopla_href=None):
+def _item(title, author, manifestations, hoopla_href=None, subtitle=None):
     """Build a single cp-search-result-item block for fixture pages."""
 
     hoopla = ""
@@ -19,6 +19,12 @@ def _item(title, author, manifestations, hoopla_href=None):
             "</span></a>"
         )
 
+    extra = (
+        f'<div class="cp-subtitle">{subtitle}</div>'
+        if subtitle
+        else ""
+    )
+
     item = (
         '<li class="row cp-search-result-item">'
         '<a href="/v2/record/SITEM1" data-key="bib-image-link">cover</a>'
@@ -26,7 +32,8 @@ def _item(title, author, manifestations, hoopla_href=None):
         '<a href="/v2/record/SITEM1" data-key="bib-title">'
         f'<span class="title-content">{title}</span>'
         "</a></h3>"
-        '<span class="cp-by-author-block --block">by '
+        + extra
+        + '<span class="cp-by-author-block --block">by '
         '<span class="cp-author-link"><span>'
         f'<a class="author-link" data-key="author-link" href="/v2/s">{author}</a>'
         "</span></span></span>"
@@ -154,6 +161,37 @@ def test_extract_catalog_hoopla_instant_available():
     assert len(results) == 1
     assert results[0].format == "Audiobook"
     assert results[0].available is True
+
+
+def test_extract_catalog_short_title_with_subtitle_matches():
+    """Bibliocommons shows the short main title as the item title; the
+    subtitle only appears in the record text. Matching must use the full
+    item text rather than requiring the item title to match alone."""
+    from library.oakland import _extract_bibliocommons_results
+
+    html = _page([
+        _item(
+            "The Wager",
+            "Grann, David",
+            [
+                _manifestation(
+                    "/v2/record/SBOOK2", "Book, 2023", "book",
+                    "available", "Available",
+                )
+            ],
+            subtitle="A Tale of Shipwreck, Mutiny and Murder",
+        )
+    ])
+
+    results = _extract_bibliocommons_results(
+        html, "oaklandlibrary", "oakland",
+        "The Wager: A Tale of Shipwreck, Mutiny and Murder", "David Grann",
+    )
+
+    assert len(results) == 1
+    assert results[0].url == (
+        "https://oaklandlibrary.bibliocommons.com/v2/record/SBOOK2"
+    )
 
 
 def test_extract_catalog_skips_unrelated_titles():
