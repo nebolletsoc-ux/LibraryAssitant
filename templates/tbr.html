@@ -278,31 +278,41 @@
 
         .filter-bar::-webkit-scrollbar { display: none; }
 
-        .filter-pill {
+        .seg {
             display: inline-flex;
             align-items: center;
-            gap: 4px;
-            padding: 6px 10px;
+            gap: 2px;
+            padding: 2px;
             border-radius: 999px;
-            font-size: 12px;
-            font-weight: 600;
-            white-space: nowrap;
-            font-family: inherit;
+            background: #E5E7EB;
+            flex-shrink: 0;
+        }
+
+        .seg-btn {
+            width: 32px;
+            height: 26px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            border-radius: 999px;
+            background: transparent;
+            color: #94A3B8;
             cursor: pointer;
-            border: 1px solid #E2E8F0;
-            background: #fff;
-            color: #64748B;
+            font-family: inherit;
             transition: all .15s;
             flex-shrink: 0;
         }
 
-        .filter-pill.active {
-            background: #1C1917;
-            border-color: #1C1917;
-            color: #fff;
-        }
+        .seg-btn svg { flex-shrink: 0; }
 
-        .filter-pill svg { flex-shrink: 0; }
+        .seg-btn:hover { color: #64748B; }
+
+        .seg-btn.active {
+            background: #fff;
+            color: #1C1917;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+        }
 
         .filter-divider {
             width: 1px;
@@ -311,49 +321,30 @@
             flex-shrink: 0;
         }
 
-        .available-pill {
+        .available-filter {
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            padding: 6px 10px;
-            border-radius: 999px;
-            font-size: 12px;
-            font-weight: 600;
-            white-space: nowrap;
-            font-family: inherit;
+            padding: 6px;
+            border: none;
+            background: none;
             cursor: pointer;
-            border: 1px solid #E2E8F0;
-            background: #fff;
+            font-family: inherit;
             color: #64748B;
-            transition: all .15s;
+            transition: color .15s;
             flex-shrink: 0;
         }
 
-        .available-pill.active {
-            background: #16A34A;
-            border-color: #16A34A;
-            color: #fff;
+        .available-filter svg {
+            stroke-width: 1.75;
+            transition: stroke-width .15s;
         }
 
-        .dot {
-            display: inline-flex;
-            width: 10px;
-            height: 10px;
-            border-radius: 999px;
-            border: 1.5px solid #94A3B8;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
+        .available-filter:hover { color: #334155; }
 
-        .available-pill.active .dot { border-color: #fff; }
-        .available-pill.active .dot-fill {
-            width: 4px;
-            height: 4px;
-            border-radius: 999px;
-            background: #fff;
-            display: block;
-        }
+        .available-filter.active { color: #16A34A; }
+        .available-filter.active svg { stroke-width: 2.75; }
+        .available-filter.active .available-count { display: none; }
 
         .available-count {
             background: #DCFCE7;
@@ -365,11 +356,7 @@
             line-height: 16px;
             tabular-nums: tabular-nums;
             font-variant-numeric: tabular-nums;
-        }
-
-        .available-pill.active .available-count {
-            background: rgba(255, 255, 255, 0.25);
-            color: #fff;
+            flex-shrink: 0;
         }
 
         /* ---------- Sort dropdown ---------- */
@@ -1034,19 +1021,20 @@
                 </div>
             </div>
             <div class="filter-bar">
-                <button class="filter-pill active" data-format="all" type="button">All</button>
-                <button class="filter-pill" data-format="ebook" type="button">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
-                    eBook
-                </button>
-                <button class="filter-pill" data-format="audio" type="button">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/></svg>
-                    Audio
-                </button>
+                <div class="seg" role="group" aria-label="Format filter">
+                    <button class="seg-btn" data-format="ebook" title="eBooks" type="button">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+                    </button>
+                    <button class="seg-btn active" data-format="all" title="All formats" type="button">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>
+                    </button>
+                    <button class="seg-btn" data-format="audio" title="Audio" type="button">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/></svg>
+                    </button>
+                </div>
                 <div class="filter-divider"></div>
-                <button class="available-pill" id="available-filter" type="button">
-                    <span class="dot" id="available-dot"></span>
-                    Available
+                <button class="available-filter" id="available-filter" type="button" title="Toggle availability filter">
+                    <svg id="available-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><line x1="3" y1="6" x2="21" y2="6"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="13" y1="18" x2="21" y2="18"/></svg>
                     <span class="available-count" id="available-count">0</span>
                 </button>
                 <div class="sort-wrap">
@@ -1257,7 +1245,8 @@
                         availableOnly = false;
                         activeFormat = "all";
                         sortKey = "status";
-                        document.querySelectorAll(".filter-pill").forEach(b => b.classList.toggle("active", b.dataset.format === "all"));
+                        document.querySelectorAll(".seg-btn").forEach(b => b.classList.toggle("active", b.dataset.format === "all"));
+                        document.getElementById("available-filter").classList.remove("active");
                         renderBooks();
                     });
                 }
@@ -1980,10 +1969,10 @@
             renderOnlineResults();
         });
 
-        document.querySelectorAll(".filter-pill").forEach(button => {
+        document.querySelectorAll(".seg-btn").forEach(button => {
             button.addEventListener("click", () => {
                 activeFormat = button.dataset.format;
-                document.querySelectorAll(".filter-pill").forEach(item => item.classList.toggle("active", item === button));
+                document.querySelectorAll(".seg-btn").forEach(item => item.classList.toggle("active", item === button));
                 renderBooks();
             });
         });
@@ -1991,8 +1980,6 @@
         document.getElementById("available-filter").addEventListener("click", () => {
             availableOnly = !availableOnly;
             document.getElementById("available-filter").classList.toggle("active", availableOnly);
-            const dot = document.getElementById("available-dot");
-            dot.innerHTML = availableOnly ? '<span class="dot-fill"></span>' : "";
             renderBooks();
         });
 
