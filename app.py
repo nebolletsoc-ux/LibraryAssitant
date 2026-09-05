@@ -44,6 +44,7 @@ def _normalize_database_url(raw):
 # fall back to the local SQLite file in the instance folder, which is
 # ephemeral on Render's free tier (wiped on every deploy/restart).
 database_url = _normalize_database_url(os.environ.get("DATABASE_URL"))
+USE_POSTGRES = bool(database_url)
 if database_url:
     app.config["SQLALCHEMY_DATABASE_URI"] = database_url
     # Postgres: recycle long-lived pooled connections and re-check them.
@@ -125,7 +126,15 @@ def require_password():
 @app.route("/healthz")
 def healthz():
     # Lightweight endpoint for hosting platforms to confirm the app is alive.
-    return jsonify({"status": "ok"})
+    # "database" reports the active backend so we can verify persistence is
+    # configured (postgres) or that we're on the ephemeral local file
+    # (sqlite), which gets wiped on redeploy.
+    return jsonify(
+        {
+            "status": "ok",
+            "database": "postgres" if USE_POSTGRES else "sqlite",
+        }
+    )
 
 
 MAX_WORKERS = 8
