@@ -11,6 +11,23 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 
 
+class User(db.Model):
+    """An account that owns their own TBR list and library config."""
+    __tablename__ = "users"
+
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False, index=True)
+    password_hash = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "username": self.username,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 class Book(db.Model):
     """
     A book record with metadata from ISBN lookups.

@@ -1,7 +1,9 @@
 import csv
+import hmac
 import io
 import json
 import os
+import secrets
 import threading
 import time
 import uuid
@@ -11,15 +13,20 @@ import requests
 from requests import RequestException
 from concurrent.futures import ThreadPoolExecutor
 
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, g
 from sqlalchemy.orm import joinedload
+from werkzeug.security import generate_password_hash, check_password_hash
 
-from models import db, Book, UserBook, Availability, LibraryConfig
+from models import db, Book, UserBook, Availability, LibraryConfig, User
 from library.isbn import find_isbn
 from library.oakland import search_libraries
 
 
 app = Flask(__name__)
+
+# Session signing key is resolved inside the app context below (after the DB
+# is ready), from SECRET_KEY env var or a random per-deployment secret stored
+# in the database.
 
 def _normalize_database_url(raw):
     """Normalize a DATABASE_URL for SQLAlchemy.
@@ -84,6 +91,33 @@ with app.app_context():
     # No libraries are seeded by default — the app starts with an empty
     # configuration (see LIBRARY_PRESETS above). Nothing to initialize.
 
+    # Session signing key: prefer SECRET_KEY from the environment; otherwise
+    # keep a random per-deployment secret in the database so login sessions
+    # survive restarts/redeploys on Render's ephemeral filesystem and can't
+    # be forged from a known fallback value.
+    from sqlalchemy import text as _text
+
+    db.session.execute(_text(
+        "CREATE TABLE IF NOT EXISTS app_settings "
+        "(key VARCHAR(100) PRIMARY KEY, value TEXT NOT NULL)"
+    ))
+    env_secret = os.environ.get("SECRET_KEY")
+    if env_secret:
+        app.config["SECRET_KEY"] = env_secret
+    else:
+        row = db.session.execute(_text(
+            "SELECT value FROM app_settings WHERE key = 'secret_key'"
+        )).first()
+        if row:
+            app.config["SECRET_KEY"] = row[0]
+        else:
+            secret = secrets.token_urlsafe(48)
+            db.session.execute(_text(
+                "INSERT INTO app_settings (key, value) VALUES ('secret_key', :v)"
+            ), {"v": secret})
+            db.session.commit()
+            app.config["SECRET_KEY"] = secret
+
 
 # Optional shared-password gate. Off by default (no env var set = no prompt,
 # same as running locally today). Set APP_PASSWORD once this has a public
@@ -100,9 +134,158 @@ def no_cache(response):
     revision, and the API data is constantly refreshed, so any HTTP cache -
     especially mobile Safari's heuristic caching - can leave users running
     an old bundle (this caused "Recheck does nothing" reports).
+
+    Also sets the CSRF double-submit cookie if the client doesn't have one
+    yet. It lives in a plain (non-HttpOnly) cookie so the JS can read it back
+    and echo it as the X-CSRF-Token header on state-changing API requests.
     """
+    if "csrf_token" not in request.cookies:
+        response.set_cookie(
+            "csrf_token",
+            secrets.token_urlsafe(32),
+            httponly=False,
+            samesite="Lax",
+            max_age=60 * 60 * 24 * 30,
+        )
     response.headers["Cache-Control"] = "no-store"
     return response
+
+
+PUBLIC_PATHS = {"/healthz", "/", "/tbr", "/favicon.ico"}
+
+
+def _is_public_path(path):
+    if path in PUBLIC_PATHS:
+        return True
+    # Auth endpoints must stay reachable before a user has a session.
+    return path.startswith("/api/auth/")
+
+
+def _current_user_id():
+    """The logged-in user's id inside a request (auth-gated routes only)."""
+    user = getattr(g, "user", None)
+    return user.id if user else None
+
+
+@app.before_request
+def _load_current_user():
+    g.user = None
+    user_id = session.get("user_id")
+    if user_id:
+        user = db.session.get(User, user_id)
+        if user:
+            g.user = user
+        else:
+            session.pop("user_id", None)
+    return None
+
+
+@app.before_request
+def _require_api_auth():
+    """Only the API carries data; every /api route except public ones needs a session."""
+    if not request.path.startswith("/api/"):
+        return None
+    if _is_public_path(request.path):
+        return None
+    if getattr(g, "user", None) is None:
+        return jsonify({"error": "Authentication required"}), 401
+    return None
+
+
+@app.before_request
+def _csrf_protect():
+    """Double-submit cookie CSRF defense for mutating /api routes.
+
+    The server drops a csrf_token cookie; the frontend echoes it back in the
+    X-CSRF-Token header. An attacking site can't read that cookie (same-origin
+    policy) so a cross-site forged request won't carry a matching header.
+    """
+    if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
+        return None
+    if not request.path.startswith("/api/"):
+        return None
+    if _is_public_path(request.path):
+        return None
+    header_token = request.headers.get("X-CSRF-Token") or ""
+    cookie_token = request.cookies.get("csrf_token") or ""
+    if not header_token or not cookie_token or not hmac.compare_digest(header_token, cookie_token):
+        return jsonify({"error": "Invalid or missing CSRF token"}), 403
+    return None
+
+
+def _adopt_legacy_user_rows(user_id):
+    """Claim the pre-accounts data for the very first account.
+
+    Before accounts existed everything was stored under the implied
+    user_id=1 (books, per-book row, library config). When the first account
+    is created, those rows become theirs. If that account happened to get
+    id=1 (fresh database), nothing needs moving — the rows already belong
+    to them. Later accounts must never adopt: rows under id=1 stop being
+    "unowned" the moment a first account exists (even when its id is 1).
+    """
+    if user_id == 1:
+        return
+    moved = False
+    for model in (UserBook, LibraryConfig):
+        if model.query.filter_by(user_id=1).first():
+            model.query.filter_by(user_id=1).update(
+                {"user_id": user_id}, synchronize_session=False
+            )
+            moved = True
+    if moved:
+        db.session.commit()
+
+
+@app.route("/api/auth/register", methods=["POST"])
+def register():
+    data = request.get_json() or {}
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    if not username or not password:
+        return jsonify({"error": "Username and password are required"}), 400
+    if len(username) > 80:
+        return jsonify({"error": "Username must be 80 characters or fewer"}), 400
+    if len(password) < 6:
+        return jsonify({"error": "Password must be at least 6 characters"}), 400
+    if User.query.filter_by(username=username).first():
+        return jsonify({"error": "That username is taken"}), 409
+
+    first_user = User.query.count() == 0
+    user = User(username=username, password_hash=generate_password_hash(password))
+    db.session.add(user)
+    db.session.flush()
+    if first_user:
+        _adopt_legacy_user_rows(user.id)
+    db.session.commit()
+
+    session["user_id"] = user.id
+    return jsonify({"user": user.to_dict()}), 201
+
+
+@app.route("/api/auth/login", methods=["POST"])
+def login():
+    data = request.get_json() or {}
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    user = User.query.filter_by(username=username).first()
+    if not user or not check_password_hash(user.password_hash, password):
+        return jsonify({"error": "Invalid username or password"}), 401
+    session["user_id"] = user.id
+    return jsonify({"user": user.to_dict()}), 200
+
+
+@app.route("/api/auth/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return jsonify({"ok": True}), 200
+
+
+@app.route("/api/auth/me", methods=["GET"])
+def me():
+    user = getattr(g, "user", None)
+    if not user:
+        return jsonify({"error": "Not authenticated"}), 401
+    return jsonify({"user": user.to_dict()}), 200
 
 
 @app.before_request
@@ -572,12 +755,12 @@ def list_books():
             UserBook.query.options(
                 joinedload(UserBook.book).joinedload(Book.availability)
             )
-            .filter_by(user_id=1, status="tbr")
+            .filter_by(user_id=_current_user_id(), status="tbr")
             .all()
         )
         enabled_keys = {
             lib.library_key
-            for lib in LibraryConfig.query.filter_by(user_id=1, enabled=True).all()
+            for lib in LibraryConfig.query.filter_by(user_id=_current_user_id(), enabled=True).all()
         }
         books = []
         for user_book in user_books:
@@ -775,7 +958,7 @@ def add_book():
         
         # Check if already in user's TBR
         user_book = UserBook.query.filter_by(
-            user_id=1,
+            user_id=_current_user_id(),
             book_id=book.id,
             status="tbr"
         ).first()
@@ -785,7 +968,7 @@ def add_book():
         
         # Add to user's TBR
         user_book = UserBook(
-            user_id=1,
+            user_id=_current_user_id(),
             book_id=book.id,
             status="tbr"
         )
@@ -875,7 +1058,7 @@ def import_tbr_csv():
                 db.session.flush()
 
             user_book = UserBook.query.filter_by(
-                user_id=1,
+                user_id=_current_user_id(),
                 book_id=book.id,
                 status="tbr",
             ).first()
@@ -883,7 +1066,7 @@ def import_tbr_csv():
                 skipped += 1
                 continue
 
-            db.session.add(UserBook(user_id=1, book_id=book.id, status="tbr"))
+            db.session.add(UserBook(user_id=_current_user_id(), book_id=book.id, status="tbr"))
             added += 1
 
         db.session.commit()
@@ -900,7 +1083,7 @@ def remove_book(user_book_id):
     Remove a book from the user's TBR list.
     """
     try:
-        user_book = UserBook.query.filter_by(id=user_book_id, user_id=1).first()
+        user_book = UserBook.query.filter_by(id=user_book_id, user_id=_current_user_id()).first()
         
         if not user_book:
             return jsonify({"error": "Book not found"}), 404
@@ -929,7 +1112,7 @@ def clear_tbr_list():
         return jsonify({"error": "Confirmation required"}), 400
 
     try:
-        deleted = UserBook.query.filter_by(user_id=1, status="tbr").delete()
+        deleted = UserBook.query.filter_by(user_id=_current_user_id(), status="tbr").delete()
         db.session.commit()
         return jsonify({"message": "Reading list cleared", "deleted": deleted}), 200
     except Exception as e:
@@ -947,7 +1130,7 @@ def check_availability(user_book_id):
     Results are cached in the database.
     """
     try:
-        user_book = UserBook.query.filter_by(id=user_book_id, user_id=1).first()
+        user_book = UserBook.query.filter_by(id=user_book_id, user_id=_current_user_id()).first()
         
         if not user_book or not user_book.book:
             return jsonify({"error": "Book not found"}), 404
@@ -974,7 +1157,7 @@ def check_availability(user_book_id):
 def _library_search_configs():
     """Return enabled library settings in the catalog search format."""
     configs = []
-    for library in LibraryConfig.query.filter_by(user_id=1, enabled=True).all():
+    for library in LibraryConfig.query.filter_by(user_id=_current_user_id(), enabled=True).all():
         config = {"key": library.library_key}
         if library.bibliocommons:
             config["bibliocommons"] = library.bibliocommons
@@ -1067,7 +1250,7 @@ def start_check_all():
         if stale_libraries:
             db.session.commit()
 
-        user_books = UserBook.query.filter_by(user_id=1, status="tbr").all()
+        user_books = UserBook.query.filter_by(user_id=_current_user_id(), status="tbr").all()
         if not user_books:
             return jsonify({"total": 0, "checked": 0, "failures": [], "done": True}), 200
 
@@ -1136,7 +1319,7 @@ def get_availability(user_book_id):
     Get cached availability for a book.
     """
     try:
-        user_book = UserBook.query.filter_by(id=user_book_id, user_id=1).first()
+        user_book = UserBook.query.filter_by(id=user_book_id, user_id=_current_user_id()).first()
         
         if not user_book or not user_book.book:
             return jsonify({"error": "Book not found"}), 404
@@ -1161,7 +1344,7 @@ def get_libraries():
     Get all available libraries and their current enabled status.
     """
     try:
-        libraries = LibraryConfig.query.filter_by(user_id=1).all()
+        libraries = LibraryConfig.query.filter_by(user_id=_current_user_id()).all()
         return jsonify([lib.to_dict() for lib in libraries])
     except Exception as e:
         print(f"Error getting libraries: {e}")
@@ -1174,7 +1357,7 @@ def available_libraries():
     try:
         existing = {
             c.library_key
-            for c in LibraryConfig.query.filter_by(user_id=1).all()
+            for c in LibraryConfig.query.filter_by(user_id=_current_user_id()).all()
         }
         result = [
             {
@@ -1206,7 +1389,7 @@ def update_library(library_id):
         }
     """
     try:
-        library = LibraryConfig.query.filter_by(id=library_id, user_id=1).first()
+        library = LibraryConfig.query.filter_by(id=library_id, user_id=_current_user_id()).first()
         
         if not library:
             return jsonify({"error": "Library not found"}), 404
@@ -1239,7 +1422,7 @@ def add_library():
         if not library_key:
             return jsonify({"error": "library_key is required"}), 400
 
-        existing = LibraryConfig.query.filter_by(user_id=1, library_key=library_key).first()
+        existing = LibraryConfig.query.filter_by(user_id=_current_user_id(), library_key=library_key).first()
         if existing:
             return jsonify({"error": "That library is already configured"}), 409
 
@@ -1259,7 +1442,7 @@ def add_library():
             # A label-only custom library is allowed (it just isn't searched).
 
         new_library = LibraryConfig(
-            user_id=1,
+            user_id=_current_user_id(),
             library_key=library_key,
             label=label,
             bibliocommons=bibliocommons,

@@ -999,14 +999,126 @@
         .status-toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
         .status-toast.error { background: #BE123C; }
         .status-toast.warning { background: #B45309; }
+
+        /* ---------- Auth screen ---------- */
+
+        .auth-screen {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #F5F1EB;
+            padding: 24px;
+        }
+        .auth-screen[hidden] { display: none; }
+
+        .auth-card {
+            width: 100%;
+            max-width: 360px;
+            background: #fff;
+            border: 1px solid #E2E8F0;
+            border-radius: 16px;
+            padding: 28px 24px;
+            text-align: center;
+            box-shadow: 0 8px 28px rgba(28, 25, 23, 0.08);
+        }
+
+        .auth-logo {
+            width: 64px;
+            height: 64px;
+            object-fit: cover;
+            border-radius: 14px;
+            margin-bottom: 12px;
+        }
+
+        .auth-card h1 {
+            font-size: 24px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            margin-bottom: 4px;
+        }
+
+        .auth-sub {
+            color: #6B7280;
+            font-size: 13px;
+            margin-bottom: 20px;
+        }
+
+        .auth-input {
+            width: 100%;
+            padding: 11px 14px;
+            margin-bottom: 10px;
+            border: 1px solid #CBD5E1;
+            border-radius: 10px;
+            font-size: 14px;
+            font-family: inherit;
+            background: #F8FAFC;
+            color: #1C1917;
+        }
+        .auth-input:focus {
+            outline: none;
+            border-color: #78716C;
+            background: #fff;
+        }
+
+        .auth-error {
+            color: #BE123C;
+            font-size: 13px;
+            margin-bottom: 10px;
+            text-align: left;
+        }
+        .auth-error[hidden] { display: none; }
+
+        .auth-btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            background: #1C1917;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            margin-bottom: 10px;
+            transition: opacity .15s;
+        }
+        .auth-btn:hover { opacity: .88; }
+        .auth-btn:disabled { opacity: .5; cursor: default; }
+
+        .auth-btn-secondary {
+            background: #fff;
+            color: #1C1917;
+            border: 1px solid #CBD5E1;
+            margin-bottom: 0;
+        }
+        .auth-btn-secondary:hover { background: #F8FAFC; opacity: 1; }
     </style>
 </head>
 <body>
+    <div id="auth-screen" class="auth-screen" hidden>
+        <div class="auth-card">
+            <img class="auth-logo" src="{{ url_for('static', filename='owl icon2.PNG') }}" alt="MyNextRead">
+            <h1 class="h-serif">MyNextRead</h1>
+            <p class="auth-sub">Sign in to your reading list</p>
+            <input id="auth-username" class="auth-input" type="text" placeholder="Username" autocomplete="username">
+            <input id="auth-password" class="auth-input" type="password" placeholder="Password" autocomplete="current-password">
+            <p id="auth-error" class="auth-error" hidden></p>
+            <button id="auth-login" class="auth-btn" type="button">Log in</button>
+            <button id="auth-register" class="auth-btn auth-btn-secondary" type="button">Create account</button>
+        </div>
+    </div>
     <div id="app">
         <header class="app-header">
             <div class="header-row">
                 <img class="app-logo" src="{{ url_for('static', filename='owl icon2.PNG') }}" alt="MyNextRead" width="40" height="40">
                 <div class="header-actions">
+                    <button class="pill-btn" id="logout-btn" title="Log out" style="display:none;">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                        Log out
+                    </button>
                     <button class="pill-btn" id="import-btn" title="Import reading list">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                         Import
@@ -1112,6 +1224,100 @@
         let sortKey = "title-asc";
         let searchQuery = "";
         let selectedBook = null;
+        let currentUser = null;
+
+        // ---------- auth / CSRF ----------
+
+        function csrfToken() {
+            const match = document.cookie.split(";").map(s => s.trim())
+                .find(s => s.startsWith("csrf_token="));
+            return match ? decodeURIComponent(match.slice("csrf_token=".length)) : "";
+        }
+
+        const _rawFetch = window.fetch.bind(window);
+        window.fetch = (input, init) => {
+            init = Object.assign({}, init || {});
+            const target = typeof input === "string" ? input : (input && input.url) || "";
+            const method = ((init.method || input.method || "GET") || "").toUpperCase();
+            if (target.indexOf("/api/") !== -1 && ["POST", "PUT", "PATCH", "DELETE"].indexOf(method) !== -1) {
+                const headers = new Headers(init.headers || {});
+                if (!headers.has("X-CSRF-Token")) headers.set("X-CSRF-Token", csrfToken());
+                init.headers = headers;
+            }
+            return _rawFetch(input, init);
+        };
+
+        function setAuthUI() {
+            const authed = Boolean(currentUser);
+            document.getElementById("auth-screen").hidden = authed;
+            document.getElementById("logout-btn").style.display = authed ? "inline-flex" : "none";
+            if (authed) document.getElementById("auth-username").value = "";
+        }
+
+        async function refreshSession() {
+            try {
+                const resp = await _rawFetch("/api/auth/me");
+                currentUser = resp.ok ? (await resp.json()).user : null;
+            } catch (e) {
+                currentUser = null;
+            }
+            setAuthUI();
+            if (currentUser) {
+                await loadBooks();
+                await loadLibraries();
+            }
+        }
+
+        async function authRequest(path, body, btn) {
+            btn.disabled = true;
+            const errEl = document.getElementById("auth-error");
+            errEl.hidden = true;
+            try {
+                const resp = await window.fetch(path, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body),
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok) throw new Error(data.error || "Something went wrong");
+                return data;
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function submitAuth(mode, btn) {
+            const username = document.getElementById("auth-username").value.trim();
+            const password = document.getElementById("auth-password").value;
+            const errEl = document.getElementById("auth-error");
+            errEl.hidden = true;
+            if (!username || !password) {
+                errEl.textContent = "Enter a username and password.";
+                errEl.hidden = false;
+                return;
+            }
+            try {
+                const data = await authRequest(`/api/auth/${mode}`, { username, password }, btn);
+                currentUser = data.user;
+                document.getElementById("auth-password").value = "";
+                await refreshSession();
+            } catch (e) {
+                errEl.textContent = e.message;
+                errEl.hidden = false;
+            }
+        }
+
+        document.getElementById("auth-login").addEventListener("click",
+            () => submitAuth("login", document.getElementById("auth-login")));
+        document.getElementById("auth-register").addEventListener("click",
+            () => submitAuth("register", document.getElementById("auth-register")));
+        document.getElementById("logout-btn").addEventListener("click", async () => {
+            try { await window.fetch("/api/auth/logout", { method: "POST" }); } catch (e) {}
+            currentUser = null;
+            allBooks = [];
+            libraryConfigs = [];
+            setAuthUI();
+        });
 
         const STATUS_ORDER = { available: 0, waitlist: 1, unavailable: 2, pending: 3 };
         const SORT_OPTIONS = [
@@ -1201,9 +1407,11 @@
         async function loadBooks() {
             try {
                 const resp = await fetch(`${API_BASE}/books`);
+                if (!resp.ok) throw new Error("not-authed");
                 allBooks = await resp.json();
                 renderBooks();
             } catch (e) {
+                if (e.message === "not-authed") return;
                 showToast("Error loading books", "error");
             }
         }
@@ -2025,8 +2233,7 @@
             e.target.value = "";
         });
 
-        loadBooks();
-        loadLibraries();
+        refreshSession();
     </script>
 </body>
 </html>

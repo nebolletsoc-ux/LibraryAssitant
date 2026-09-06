@@ -172,15 +172,13 @@ def test_check_all_tracks_failures(client, make_result, _mock_network, monkeypat
 
     _mock_network.append(make_result(format="eBook", available=True))
 
-    # Force a failure on the second book.
+    # Force a failure on the second book, deterministically (the worker pool
+    # schedules the two checks concurrently, so "second call" would race).
     original_refresh = None
     import app as app_module
 
-    calls = {"n": 0}
-
     def flaky_refresh(user_book, configs):
-        calls["n"] += 1
-        if calls["n"] == 2:
+        if user_book.book.title == "B":
             raise RuntimeError("boom")
         return original_refresh(user_book, configs)
 

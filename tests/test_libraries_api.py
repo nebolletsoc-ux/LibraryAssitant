@@ -16,11 +16,11 @@ def test_get_libraries_returns_defaults(client):
     assert all(lib["enabled"] is False for lib in data)
 
 
-def test_get_libraries_always_has_user1(client, app_context):
-    from models import LibraryConfig, db
+def test_get_libraries_returns_every_seeded_preset(client, current_user_id):
+    from models import LibraryConfig
     resp = client.get("/api/libraries")
     assert resp.status_code == 200
-    assert len(resp.get_json()) == LibraryConfig.query.filter_by(user_id=1).count()
+    assert len(resp.get_json()) == LibraryConfig.query.filter_by(user_id=current_user_id).count()
 
 
 def test_update_library_enables_it(client):
@@ -60,11 +60,11 @@ def test_update_with_no_body_keeps_current(client):
 
 # ---------- add library (POST /api/libraries) ----------
 
-def test_add_preset_library_from_available(client, app_context):
+def test_add_preset_library_from_available(client, current_user_id, app_context):
     from models import LibraryConfig, db
 
     with app_context.app.app_context():
-        LibraryConfig.query.filter_by(user_id=1, library_key="oakland").delete()
+        LibraryConfig.query.filter_by(user_id=current_user_id, library_key="oakland").delete()
         db.session.commit()
 
     resp = client.post("/api/libraries", json={"library_key": "oakland"})
@@ -134,11 +134,11 @@ def test_available_libraries_empty_when_all_seeded(client):
     assert client.get("/api/libraries/available").get_json() == []
 
 
-def test_available_libraries_show_only_unconfigured_presets(client, app_context):
+def test_available_libraries_show_only_unconfigured_presets(client, current_user_id, app_context):
     from models import LibraryConfig, db
 
     with app_context.app.app_context():
-        LibraryConfig.query.filter_by(user_id=1, library_key="oakland").delete()
+        LibraryConfig.query.filter_by(user_id=current_user_id, library_key="oakland").delete()
         db.session.commit()
 
     keys = [lib["library_key"] for lib in client.get("/api/libraries/available").get_json()]
