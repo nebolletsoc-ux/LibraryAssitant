@@ -1109,7 +1109,7 @@
         let libraryConfigs = [];
         let activeFormat = "all";
         let availableOnly = false;
-        let sortKey = "status";
+        let sortKey = "title-asc";
         let searchQuery = "";
         let selectedBook = null;
 
@@ -1261,7 +1261,7 @@
                         document.getElementById("clear-btn").style.display = "none";
                         availableOnly = false;
                         activeFormat = "all";
-                        sortKey = "status";
+                        sortKey = "title-asc";
                         document.querySelectorAll(".seg-btn").forEach(b => b.classList.toggle("active", b.dataset.format === "all"));
                         document.getElementById("available-filter").classList.remove("active");
                         renderBooks();

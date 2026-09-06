@@ -58,7 +58,7 @@ def status_of(ub, format_="all"):
 _STATUS_ORDER = {"available": 0, "waitlist": 1, "unavailable": 2, "pending": 3}
 
 
-def filtered_books(books, query="", active_format="all", available_only=False, sort_key="status"):
+def filtered_books(books, query="", active_format="all", available_only=False, sort_key="title-asc"):
     q = query.lower()
     filtered = []
     for ub in books:
@@ -264,6 +264,20 @@ def test_search_applies_format_filter_together():
 
 
 # ---------- sort ------------------------------------------------------------
+
+def test_sort_defaults_to_title_asc():
+    # Mirrors the frontend default (let sortKey = "title-asc" in tbr.html).
+    import inspect
+    sig = inspect.signature(filtered_books)
+    assert sig.parameters["sort_key"].default == "title-asc"
+
+    books = [
+        book(1, title="Zebra", availability=[row("eBook", True)]),
+        book(2, title="Apple", availability=[row("eBook", True)]),
+    ]
+    result = filtered_books(books)
+    assert [b["id"] for b in result] == [2, 1]
+
 
 def test_sort_status_orders_available_then_waitlist_then_unavailable():
     books = [
