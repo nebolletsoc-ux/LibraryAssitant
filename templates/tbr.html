@@ -938,6 +938,29 @@
 
         .clear-tbr:hover { color: #EF4444; }
 
+        .list-footer {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 6px 0 24px;
+        }
+
+        .footer-btn {
+            background: none;
+            border: none;
+            color: #94A3B8;
+            font-size: 13px;
+            font-weight: 500;
+            font-family: inherit;
+            text-decoration: underline;
+            cursor: pointer;
+            padding: 4px 8px;
+        }
+
+        .footer-btn:hover { color: #1C1917; }
+        #clear-tbr.footer-btn:hover { color: #EF4444; }
+
         .lib-input {
             display: block;
             width: calc(100% - 40px);
@@ -1115,10 +1138,6 @@
             <div class="header-row">
                 <img class="app-logo" src="{{ url_for('static', filename='owl icon2.PNG') }}" alt="MyNextRead" width="40" height="40">
                 <div class="header-actions">
-                    <button class="pill-btn" id="logout-btn" title="Log out" style="display:none;">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                        Log out
-                    </button>
                     <button class="pill-btn" id="import-btn" title="Import reading list">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                         Import
@@ -1189,6 +1208,10 @@
                 <span class="legend-item"><span class="legend-swatch unavailable"></span>Unavailable</span>
                 <span class="legend-item"><span class="legend-swatch pending"></span>Not checked</span>
                 <span class="legend-count" id="checked-count"></span>
+            </div>
+            <div class="list-footer">
+                <button class="footer-btn" id="clear-tbr">Clear entire reading list</button>
+                <button class="footer-btn" id="logout-btn" title="Log out" style="display:none;">Log out</button>
             </div>
         </div>
     </div>
@@ -1317,6 +1340,28 @@
             allBooks = [];
             libraryConfigs = [];
             setAuthUI();
+        });
+
+        document.getElementById("clear-tbr").addEventListener("click", () => {
+            if (!confirm("Clear your entire reading list? This can\u2019t be undone.")) return;
+            (async () => {
+                try {
+                    const resp = await fetch(`${API_BASE}/books/clear`, {
+                        method: "DELETE",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ confirm: "clear_all" }),
+                    });
+                    if (!resp.ok) {
+                        const err = await resp.json().catch(() => ({}));
+                        throw new Error(err.error || "Failed to clear list");
+                    }
+                    await loadBooks();
+                    updateLibraryIndicator();
+                    showToast("Reading list cleared");
+                } catch (e) {
+                    showToast(`Error: ${e.message}`, "error");
+                }
+            })();
         });
 
         const STATUS_ORDER = { available: 0, waitlist: 1, unavailable: 2, pending: 3 };
@@ -2109,7 +2154,6 @@
                 </div>
                 ${rows}
                 <button class="add-library" id="add-library">+ Add library</button>
-                <button class="clear-tbr" id="clear-tbr">Clear entire reading list</button>
             `;
 
             body.querySelectorAll(".switch").forEach(sw => {
@@ -2120,27 +2164,6 @@
             document.getElementById("add-library").addEventListener("click", () => {
                 librariesView = "add";
                 renderLibraries();
-            });
-            document.getElementById("clear-tbr").addEventListener("click", () => {
-                if (!confirm("Clear your entire reading list? This can\u2019t be undone.")) return;
-                (async () => {
-                    try {
-                        const resp = await fetch(`${API_BASE}/books/clear`, {
-                            method: "DELETE",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ confirm: "clear_all" }),
-                        });
-                        if (!resp.ok) {
-                            const err = await resp.json().catch(() => ({}));
-                            throw new Error(err.error || "Failed to clear list");
-                        }
-                        await loadBooks();
-                        updateLibraryIndicator();
-                        showToast("Reading list cleared");
-                    } catch (e) {
-                        showToast(`Error: ${e.message}`, "error");
-                    }
-                })();
             });
         }
 
