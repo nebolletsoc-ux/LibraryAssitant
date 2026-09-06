@@ -20,6 +20,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from models import db, Book, UserBook, Availability, LibraryConfig, User
 from library.isbn import find_isbn
 from library.oakland import search_libraries
+import mailer
 
 
 app = Flask(__name__)
@@ -91,12 +92,33 @@ with app.app_context():
     # No libraries are seeded by default — the app starts with an empty
     # configuration (see LIBRARY_PRESETS above). Nothing to initialize.
 
+    # Lightweight additive migrations for columns added after a table first
+    # shipped (the users table exists on the deployed Postgres without the
+    # notification columns). create_all() only creates missing tables, so
+    # existing databases need these ALTERs.
+    from sqlalchemy import inspect as _inspect, text as _text
+
+    _users_cols = {c["name"] for c in _inspect(db.engine).get_columns("users")}
+    _user_alters = []
+    if "email" not in _users_cols:
+        _user_alters.append("ALTER TABLE users ADD COLUMN email VARCHAR(255)")
+    if "notify_on_available" not in _users_cols:
+        _user_alters.append(
+            "ALTER TABLE users ADD COLUMN notify_on_available BOOLEAN NOT NULL DEFAULT 1"
+        )
+    if "weekly_digest" not in _users_cols:
+        _user_alters.append(
+            "ALTER TABLE users ADD COLUMN weekly_digest BOOLEAN NOT NULL DEFAULT 0"
+        )
+    for _stmt in _user_alters:
+        db.session.execute(_text(_stmt))
+    if _user_alters:
+        db.session.commit()
+
     # Session signing key: prefer SECRET_KEY from the environment; otherwise
     # keep a random per-deployment secret in the database so login sessions
     # survive restarts/redeploys on Render's ephemeral filesystem and can't
     # be forged from a known fallback value.
-    from sqlalchemy import text as _text
-
     db.session.execute(_text(
         "CREATE TABLE IF NOT EXISTS app_settings "
         "(key VARCHAR(100) PRIMARY KEY, value TEXT NOT NULL)"
@@ -286,6 +308,97 @@ def me():
     if not user:
         return jsonify({"error": "Not authenticated"}), 401
     return jsonify({"user": user.to_dict()}), 200
+
+
+@app.route("/api/user/preferences", methods=["GET"])
+def get_user_preferences():
+    """Per-account notification settings."""
+    user = getattr(g, "user", None)
+    if not user:
+        return jsonify({"error": "Authentication required"}), 401
+    return jsonify(_user_preferences(user))
+
+
+@app.route("/api/user/preferences", methods=["PATCH"])
+def update_user_preferences():
+    """Update notification settings: {"email", "notify_on_available", "weekly_digest"}."""
+    user = getattr(g, "user", None)
+    if not user:
+        return jsonify({"error": "Authentication required"}), 401
+    data = request.get_json() or {}
+    if "email" in data:
+        email = (data.get("email") or "").strip()
+        user.email = email or None
+    if "notify_on_available" in data and isinstance(data["notify_on_available"], bool):
+        user.notify_on_available = data["notify_on_available"]
+    if "weekly_digest" in data and isinstance(data["weekly_digest"], bool):
+        user.weekly_digest = data["weekly_digest"]
+    db.session.commit()
+    return jsonify(_user_preferences(user)), 200
+
+
+def _user_preferences(user):
+    return {
+        "email": user.email,
+        "notify_on_available": user.notify_on_available,
+        "weekly_digest": user.weekly_digest,
+        "smtp_enabled": mailer.is_enabled(),
+    }
+
+
+def _run_weekly_digest():
+    """Email each weekly-digest subscriber their currently available books.
+
+    Returns the number of emails sent. Called by the send_digest.py CLI (and
+    swappable into any scheduler). Non-subscribers/empties are skipped.
+    """
+    subscribers = (
+        User.query.filter_by(weekly_digest=True)
+        .filter(User.email.isnot(None))
+        .all()
+    )
+    sent = 0
+    for user in subscribers:
+        enabled_keys = {
+            lib.library_key
+            for lib in LibraryConfig.query.filter_by(user_id=user.id, enabled=True).all()
+        }
+        user_books = (
+            UserBook.query
+            .options(joinedload(UserBook.book).joinedload(Book.availability))
+            .filter_by(user_id=user.id, status="tbr")
+            .all()
+        )
+        available = []
+        for user_book in user_books:
+            rows = user_book.book.availability or []
+            if enabled_keys:
+                rows = [a for a in rows if a.library in enabled_keys]
+            avail_rows = [a for a in rows if a.available]
+            if avail_rows:
+                available.append((user_book.book, avail_rows))
+        if not available:
+            continue
+
+        lines = []
+        for book, avail_rows in available:
+            opts = ", ".join(
+                sorted({f"{a.library} · {a.format or 'book'}" for a in avail_rows})
+            )
+            lines.append(f"\u2022 {book.title}"
+                         f"{' by ' + book.author if book.author else ''} — {opts}")
+        subject = f"MyNextRead: {len(available)} book"
+        subject += "" if len(available) == 1 else "s"
+        subject += " available now"
+        mailer.submit_email(
+            user.email,
+            subject,
+            text="Books from your reading list that are available now:\n\n"
+            + "\n".join(lines)
+            + "\n\nBorrow them in MyNextRead.",
+        )
+        sent += 1
+    return sent
 
 
 @app.before_request
@@ -1173,10 +1286,18 @@ def _refresh_availability(user_book, configs):
     """Replace cached availability for one TBR entry."""
     book = user_book.book
     results = search_libraries(book.title, book.author, configs)
+
+    # Snapshot prior availability so we can detect a "became available" flip.
+    previous = {
+        (r.library, (r.format or "").lower()): bool(r.available)
+        for r in Availability.query.filter_by(book_id=book.id).all()
+    }
+
     Availability.query.filter_by(book_id=book.id).delete()
 
+    new_rows = []
     for result in results:
-        db.session.add(Availability(
+        new_rows.append(Availability(
             book_id=book.id,
             library=getattr(result, "library", "unknown"),
             provider=getattr(result, "provider", "unknown"),
@@ -1187,9 +1308,77 @@ def _refresh_availability(user_book, configs):
             wait_weeks=getattr(result, "wait_weeks", None),
             url=getattr(result, "url", None),
         ))
+        db.session.add(new_rows[-1])
 
     user_book.last_checked_at = datetime.now(timezone.utc)
     db.session.commit()
+
+    available_now = {
+        (r.library, (r.format or "").lower()): r.available
+        for r in new_rows
+    }
+    if _became_available(previous, available_now):
+        _notify_available(
+            book.id,
+            book.title,
+            book.author,
+            [r for r in new_rows if r.available],
+        )
+
+
+def _became_available(previous, current):
+    """True when something previously known-unavailable is now available.
+
+    A key counts only if it had a recorded prior state (so the very first
+    scan, where previous is empty, never triggers an alert).
+    """
+    return any(
+        available
+        and key in previous
+        and previous[key] is False
+        for key, available in current.items()
+    )
+
+
+def _notify_available(book_id, title, author, available_rows):
+    """Email every subscriber who has this book on their list.
+
+    Runs in (or pushes) an app context so worker threads and requests both
+    work. Sending is delegated to mailer.submit_email (background daemon
+    thread); tests monkeypatch it.
+    """
+    try:
+        owners = (
+            db.session.query(User)
+            .join(UserBook, UserBook.user_id == User.id)
+            .filter(
+                UserBook.book_id == book_id,
+                UserBook.status == "tbr",
+                User.email.isnot(None),
+                User.notify_on_available.is_(True),
+            )
+            .distinct()
+            .all()
+        )
+        if not owners or not available_rows:
+            return
+
+        lines = []
+        for row in available_rows:
+            fmt = row.format if row.format else "book"
+            lines.append(f"{row.library} · {fmt}")
+        summary = ", ".join(sorted(set(lines)))
+
+        subject = f"\u201c{title}\u201d is available now"
+        text = (
+            f"{title}{' by ' + author if author else ''} just became available "
+            f"at your libraries.\n\nAvailable now: {summary}\n\n"
+            "Open your reading list to borrow it."
+        )
+        for user in owners:
+            mailer.submit_email(user.email, subject, text=text)
+    except Exception as e:  # noqa: BLE001 - alerts must never break a scan
+        print(f"Error sending availability alert for book {book_id}: {e}")
 
 
 def _refresh_one_book(user_book_id, configs):

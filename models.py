@@ -19,6 +19,13 @@ class User(db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    email = db.Column(db.String(255), nullable=True)
+    notify_on_available = db.Column(
+        db.Boolean, nullable=False, default=True, server_default="1"
+    )
+    weekly_digest = db.Column(
+        db.Boolean, nullable=False, default=False, server_default="0"
+    )
 
     def to_dict(self):
         return {
