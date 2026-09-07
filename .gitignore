@@ -8,3 +8,12 @@ __pycache__/
 # stay out of git. Recreate automatically on first app startup.
 instance/*.db
 instance/*.db.bak
+
+# Personal to-read exports and dev bundles: purged from git history 2026-09-07.
+# Local copies live in the temp backup; re-export from Goodreads if needed.
+books.csv
+goodreads_library_export.csv
+storygraph_*.csv
+test_upload.csv
+uploads/
+LibraryAssistant.zip
