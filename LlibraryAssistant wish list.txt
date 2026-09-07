@@ -16,7 +16,8 @@ add ability to search free ebook/audiobook repositories that DO respect IP (gute
 
 Redundant "Hoopla · hoopla" label, RESOLVED, Hoopla availability rows in the detail modal now show the provider once ("Hoopla") instead of "Hoopla · Hoopla". (Also deduped below: most Hoopla entries were duplicates produced by Oakland and Berkeley both tagging the shared Hoopla catalog as library="hoopla".)
 Borrow links sometimes wrong, open bug (carried over from docs/buglist item 15), Some "Borrow" links take the user to the wrong book or wrong format. Needs investigation of the Bibliocommons/OverDrive/Hoopla URL-matching logic in library/oakland.py.
-Free ebook / shadow-library sites (e.g. annas-archive.gl), declined, Requested but not implemented. Anna's Archive distributes copyrighted books without publisher/author authorization; integrating it would facilitate copyright infringement, so this will not be built.
+Free ebook / shadow-library sites (e.g. gutenberg, openlibrary), no yet implemented, Anna's Archive distributes copyrighted books without publisher/author authorization; integrating it would facilitate copyright infringement, but other web sources do not.
+format for mobile, ipad, desktop. low.
 
 --- Technical debt (added after TBR rework, September 2026) ---
 No automated test suite, RESOLVED, A real pytest suite now exists and is maintained (84 tests, all offline/mocked) covering books/libraries/import-csv/check-all/clear/synopsis endpoints and the list + book-detail filter logic. Remaining coverage gaps folded into the new "Test coverage gaps" tech-debt item below.

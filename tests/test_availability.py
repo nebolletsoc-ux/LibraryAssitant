@@ -191,3 +191,36 @@ def test_check_all_tracks_failures(client, make_result, _mock_network, monkeypat
     assert progress["checked"] == 1
     assert len(progress["failures"]) == 1
     assert progress["failures"][0]["title"] == "B"
+
+
+def test_check_all_reports_current_titles_while_scanning(client, _mock_network, monkeypatch):
+    """scan-progress exposes the titles currently being checked."""
+    import app as app_module
+
+    enable_default_library(client)
+    add(client, title="A", isbn="9781111111111")
+    add(client, title="B", isbn="9782222222222")
+
+    real_refresh = app_module._refresh_availability
+
+    def slow_refresh(user_book, configs):
+        time.sleep(0.4)
+        return real_refresh(user_book, configs)
+
+    monkeypatch.setattr(app_module, "_refresh_availability", slow_refresh)
+
+    resp = client.post("/api/books/check-all")
+    assert resp.status_code == 202
+    job_id = resp.get_json()["job_id"]
+
+    seen = set()
+    current_titles = []
+    for _ in range(200):
+        progress = client.get(f"/api/books/scan-progress/{job_id}").get_json()
+        current_titles = progress.get("current") or []
+        seen.update(current_titles)
+        if progress.get("done"):
+            break
+        time.sleep(0.02)
+    assert seen == {"A", "B"}, f"expected both titles in-flight, saw {seen}"
+    assert current_titles == [], f"expected current to clear at end, got {current_titles}"

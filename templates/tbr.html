@@ -1852,7 +1852,14 @@
                     if (!resp.ok) throw new Error("failed to read progress");
                     const p = await resp.json();
                     const sec = Math.round((Date.now() - startedAt) / 1000);
-                    scanStatus(`Scanning ${p.processed} of ${p.total} books`);
+                    const titles = (p.current && p.current.length) ? p.current : [];
+                    const shown = titles.slice(0, 3).join(", ");
+                    const extra = titles.length > 3 ? ` +${titles.length - 3}` : "";
+                    scanStatus(
+                        titles.length
+                            ? `Checking ${shown}${extra} \u00b7 ${p.processed} of ${p.total} books`
+                            : `Scanning ${p.processed} of ${p.total} books`
+                    );
                     if (p.done) {
                         clearInterval(scanPollTimer);
                         scanPollTimer = null;

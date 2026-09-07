@@ -1408,17 +1408,23 @@ def _notify_available(book_id, title, author, available_rows):
         print(f"Error sending availability alert for book {book_id}: {e}")
 
 
-def _refresh_one_book(user_book_id, configs):
+def _refresh_one_book(user_book_id, configs, on_change=None):
     """Refresh one TBR entry in a worker thread.
 
     Each worker pushes its own app context so Flask-SQLAlchemy hands it a
     private scoped session (no cross-thread session sharing).
+
+    ``on_change(active, title)`` is called with True when the book begins
+    scanning and False when it finishes (success or failure), so the scan
+    supervisor can report which titles are currently in flight.
     """
     with app.app_context():
         user_book = UserBook.query.filter_by(id=user_book_id).first()
         if not user_book or not user_book.book:
             return {"id": user_book_id, "title": None, "error": "missing"}
         title = user_book.book.title
+        if on_change:
+            on_change(True, title)
         try:
             _refresh_availability(user_book, configs)
             return {"id": user_book_id, "title": title}
@@ -1426,6 +1432,9 @@ def _refresh_one_book(user_book_id, configs):
             db.session.rollback()
             print(f"Error checking {title}: {e}")
             return {"id": user_book_id, "title": title, "error": str(e)}
+        finally:
+            if on_change:
+                on_change(False, title)
 
 
 @app.route("/api/books/check-all", methods=["POST"])
@@ -1476,6 +1485,7 @@ def start_check_all():
             "processed": 0,
             "checked": 0,
             "failures": [],
+            "current": [],
             "done": False,
         }
         _active_scan = job
@@ -1493,8 +1503,16 @@ def _run_scan(job, user_book_ids, configs):
     thread never touches a scoped session.
     """
     try:
+        def _track(active, title):
+            with _scan_lock:
+                if active:
+                    if title not in job["current"]:
+                        job["current"].append(title)
+                elif title in job["current"]:
+                    job["current"].remove(title)
+
         futures = [
-            executor.submit(_refresh_one_book, user_book_id, configs)
+            executor.submit(_refresh_one_book, user_book_id, configs, _track)
             for user_book_id in user_book_ids
         ]
         for future, user_book_id in zip(futures, user_book_ids):
@@ -1526,6 +1544,7 @@ def scan_progress(job_id):
             return jsonify({"error": "Unknown scan"}), 404
         snapshot = dict(_active_scan)
         snapshot["failures"] = list(_active_scan["failures"])
+        snapshot["current"] = list(_active_scan["current"])
     return jsonify(snapshot), 200
 
 

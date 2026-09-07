@@ -76,6 +76,11 @@ def test_email_enabled_reflects_resend_key(client, monkeypatch):
     assert client.get("/api/user/preferences").get_json()["email_enabled"] is True
 
 
+def test_email_enabled_reflects_smtp_host(client, monkeypatch):
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
+    assert client.get("/api/user/preferences").get_json()["email_enabled"] is True
+
+
 def test_send_email_via_resend(monkeypatch):
     import mailer
 
@@ -119,6 +124,121 @@ def test_send_email_via_resend_reports_api_error(monkeypatch):
     ok, detail = mailer.send_email_report("reader@example.com", "Subj", text="Body")
     assert ok is False
     assert "401" in detail
+
+
+# ---------- mailer backend selection / sender ----------
+
+def test_from_addr_prefers_email_from_over_smtp_from(monkeypatch):
+    import mailer
+
+    monkeypatch.setenv("EMAIL_FROM", "Hi <a@b.com>")
+    monkeypatch.setenv("SMTP_FROM", "hi@c.com")
+    assert mailer._from_addr() == "Hi <a@b.com>"
+
+
+def test_from_addr_falls_back_to_smtp_from(monkeypatch):
+    import mailer
+
+    monkeypatch.delenv("EMAIL_FROM", raising=False)
+    monkeypatch.setenv("SMTP_FROM", "hi@c.com")
+    assert mailer._from_addr() == "hi@c.com"
+
+
+def test_resend_uses_email_from_when_set(monkeypatch):
+    import mailer
+
+    monkeypatch.setenv("RESEND_API_KEY", "re_test_123")
+    monkeypatch.setenv("EMAIL_FROM", "MyNextRead <me@mydomain.com>")
+    captured = {}
+
+    class FakeResp:
+        status_code = 200
+        content = b'{"id":"abc"}'
+
+        def json(self):
+            return {"id": "abc"}
+
+    monkeypatch.setattr(mailer.requests, "post",
+                        lambda url, **kw: (captured.update(kw), FakeResp())[1])
+
+    ok, _ = mailer.send_email_report("reader@example.com", "Subj", text="Body")
+    assert ok is True
+    assert captured["json"]["from"] == "MyNextRead <me@mydomain.com>"
+
+
+def test_resend_preferred_over_smtp_when_both_configured(monkeypatch):
+    import mailer
+
+    monkeypatch.setenv("RESEND_API_KEY", "re_test_123")
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
+    smtp_calls = []
+
+    class FakeResp:
+        status_code = 200
+        content = b'{"id":"abc"}'
+
+        def json(self):
+            return {"id": "abc"}
+
+    monkeypatch.setattr(mailer.requests, "post", lambda url, **kw: FakeResp())
+    monkeypatch.setattr(mailer, "_send_via_smtp",
+                        lambda *args, **kwargs: smtp_calls.append(1))
+
+    ok, _ = mailer.send_email_report("reader@example.com", "Subj", text="Body")
+    assert ok is True
+    assert smtp_calls == []
+
+
+def test_smtp_backend_used_when_only_smtp_configured(monkeypatch):
+    import mailer
+
+    monkeypatch.delenv("RESEND_API_KEY", raising=False)
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
+    monkeypatch.setenv("SMTP_FROM", "me@example.com")
+
+    message = {}
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout=None):
+            message["port"] = port
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def ehlo(self):
+            return ()
+
+        def starttls(self):
+            return ()
+
+        def login(self, user, password):
+            message["login"] = (user, password)
+
+        def send_message(self, msg):
+            message["from"] = msg["From"]
+            message["to"] = msg["To"]
+
+    monkeypatch.setattr(mailer.smtplib, "SMTP", FakeSMTP)
+
+    ok, _ = mailer.send_email_report("reader@example.com", "Subj", text="Body")
+    assert ok is True
+    assert message["port"] == 587
+    assert message["from"] == "me@example.com"
+    assert message["to"] == "reader@example.com"
+
+
+def test_send_email_is_noop_without_backend(monkeypatch):
+    import mailer
+
+    monkeypatch.delenv("RESEND_API_KEY", raising=False)
+    monkeypatch.delenv("SMTP_HOST", raising=False)
+
+    ok, detail = mailer.send_email_report("reader@example.com", "Subj", text="Body")
+    assert ok is False
+    assert "not configured" in detail
 
 
 # ---------- send test email ----------
