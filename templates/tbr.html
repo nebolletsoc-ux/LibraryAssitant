@@ -2253,7 +2253,11 @@
                 ${smtpMsg}
                 <div style="padding-top: 8px;">
                     <button class="auth-btn" id="settings-save" type="button">Save</button>
-                </div>`;
+                </div>
+                ${p.smtp_enabled ? `
+                <div style="text-align:center; padding-top: 0;">
+                    <button class="footer-btn" id="settings-test" type="button">Send test email</button>
+                </div>` : ""}`;
 
             document.getElementById("settings-close-inner").addEventListener("click", () =>
                 closeSheet(document.getElementById("settings-sheet")));
@@ -2265,6 +2269,9 @@
                 });
             });
             document.getElementById("settings-save").addEventListener("click", saveSettings);
+            if (p.smtp_enabled) {
+                document.getElementById("settings-test").addEventListener("click", sendTestEmail);
+            }
         }
 
         function openSettings() {
@@ -2293,6 +2300,32 @@
                 showToast("Settings saved");
             } catch (e) {
                 showToast("Failed to save settings", "error");
+            }
+        }
+
+        async function sendTestEmail() {
+            const email = document.getElementById("settings-email").value.trim();
+            if (!email) {
+                showToast("Add an email address first", "error");
+                return;
+            }
+            try {
+                const save = await fetch(`${API_BASE}/user/preferences`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email }),
+                });
+                if (!save.ok) throw new Error("save failed");
+                userPrefs = await save.json();
+                const resp = await fetch(`${API_BASE}/user/preferences/send-test`, { method: "POST" });
+                if (resp.status === 400) {
+                    const err = await resp.json().catch(() => ({}));
+                    throw new Error(err.error || "Couldn't send");
+                }
+                if (!resp.ok) throw new Error("send failed");
+                showToast("Test email sent — check your inbox");
+            } catch (e) {
+                showToast(e.message || "Failed to send test email", "error");
             }
         }
 

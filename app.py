@@ -337,6 +337,28 @@ def update_user_preferences():
     return jsonify(_user_preferences(user)), 200
 
 
+@app.route("/api/user/preferences/send-test", methods=["POST"])
+def send_test_email():
+    """Email a test message to the current user's configured address."""
+    user = getattr(g, "user", None)
+    if not user:
+        return jsonify({"error": "Authentication required"}), 401
+    if not user.email:
+        return jsonify({"error": "Add an email address first"}), 400
+    if not mailer.is_enabled():
+        return jsonify({"error": "SMTP isn't configured on this server"}), 400
+    mailer.submit_email(
+        user.email,
+        "MyNextRead test email",
+        text=(
+            "If you're reading this, email notifications are working.\n\n"
+            "You'll get an email whenever a book on your list becomes "
+            "available, plus your weekly digest if it's turned on."
+        ),
+    )
+    return jsonify({"sent": True}), 200
+
+
 def _user_preferences(user):
     return {
         "email": user.email,

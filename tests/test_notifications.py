@@ -77,6 +77,50 @@ def test_smtp_enabled_reflects_environment(client, monkeypatch):
     assert client.get("/api/user/preferences").get_json()["smtp_enabled"] is True
 
 
+# ---------- send test email ----------
+
+def test_send_test_email(client, monkeypatch):
+    import mailer
+
+    calls = []
+    monkeypatch.setattr(mailer, "is_enabled", lambda: True)
+    monkeypatch.setattr(mailer, "submit_email",
+                        lambda to, subject, text="", html=None: calls.append((to, subject, text)))
+    set_prefs(client, email="reader@example.com")
+
+    resp = client.post("/api/user/preferences/send-test")
+    assert resp.status_code == 200
+    assert resp.get_json()["sent"] is True
+    assert len(calls) == 1
+    assert calls[0][0] == "reader@example.com"
+    assert "test email" in calls[0][1].lower()
+
+
+def test_send_test_email_requires_address(client, monkeypatch):
+    import mailer
+
+    monkeypatch.setattr(mailer, "is_enabled", lambda: True)
+    resp = client.post("/api/user/preferences/send-test")
+    assert resp.status_code == 400
+    assert "email" in resp.get_json()["error"].lower()
+
+
+def test_send_test_email_requires_smtp(client, monkeypatch):
+    import mailer
+
+    monkeypatch.setattr(mailer, "is_enabled", lambda: False)
+    set_prefs(client, email="reader@example.com")
+    resp = client.post("/api/user/preferences/send-test")
+    assert resp.status_code == 400
+    assert "SMTP" in resp.get_json()["error"]
+
+
+def test_send_test_email_requires_auth(raw_client):
+    raw_client.set_cookie("csrf_token", "x")
+    assert raw_client.post("/api/user/preferences/send-test",
+                           headers={"X-CSRF-Token": "x"}).status_code == 401
+
+
 # ---------- availability alerts ----------
 
 def test_alert_when_book_becomes_available(client, make_result, _mock_network, monkeypatch):
