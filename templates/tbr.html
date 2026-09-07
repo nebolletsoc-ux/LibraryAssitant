@@ -2217,9 +2217,9 @@
         function renderSettings() {
             const body = document.getElementById("settings-sheet-body");
             const p = userPrefs || {};
-            const smtpMsg = p.smtp_enabled
+            const emailMsg = p.email_enabled
                 ? ""
-                : '<p class="settings-note">Email isn\u2019t set up on this server yet \u2014 your preferences are saved, but nothing will be sent until SMTP is configured.</p>';
+                : '<p class="settings-note">Email isn\u2019t set up on this server yet \u2014 your preferences are saved, but nothing will be sent until email is configured.</p>';
             const email = escapeHtml(p.email || "");
             const notifyOn = p.notify_on_available ? " on" : "";
             const digestOn = p.weekly_digest ? " on" : "";
@@ -2250,11 +2250,11 @@
                         <span class="switch-knob"></span>
                     </button>
                 </div>
-                ${smtpMsg}
+                ${emailMsg}
                 <div style="padding-top: 8px;">
                     <button class="auth-btn" id="settings-save" type="button">Save</button>
                 </div>
-                ${p.smtp_enabled ? `
+                ${p.email_enabled ? `
                 <div style="text-align:center; padding-top: 0;">
                     <button class="footer-btn" id="settings-test" type="button">Send test email</button>
                 </div>` : ""}`;
@@ -2269,7 +2269,7 @@
                 });
             });
             document.getElementById("settings-save").addEventListener("click", saveSettings);
-            if (p.smtp_enabled) {
+            if (p.email_enabled) {
                 document.getElementById("settings-test").addEventListener("click", sendTestEmail);
             }
         }

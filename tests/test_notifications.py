@@ -31,7 +31,7 @@ def test_preferences_defaults(client):
     assert prefs["email"] is None
     assert prefs["notify_on_available"] is True
     assert prefs["weekly_digest"] is False
-    assert prefs["smtp_enabled"] is False  # SMTP_HOST unset in the test env
+    assert prefs["email_enabled"] is False  # no RESEND_API_KEY or SMTP_HOST in tests
 
 
 def test_update_preferences(client):
@@ -71,10 +71,54 @@ def test_preferences_require_auth(raw_client):
                             headers={"X-CSRF-Token": "x"}).status_code == 401
 
 
-def test_smtp_enabled_reflects_environment(client, monkeypatch):
-    monkeypatch.setenv("SMTP_HOST", "smtp.example.test")
-    monkeypatch.setenv("SMTP_PORT", "587")
-    assert client.get("/api/user/preferences").get_json()["smtp_enabled"] is True
+def test_email_enabled_reflects_resend_key(client, monkeypatch):
+    monkeypatch.setenv("RESEND_API_KEY", "re_test_123")
+    assert client.get("/api/user/preferences").get_json()["email_enabled"] is True
+
+
+def test_send_email_via_resend(monkeypatch):
+    import mailer
+
+    monkeypatch.setenv("RESEND_API_KEY", "re_test_123")
+    captured = {}
+
+    class FakeResp:
+        status_code = 200
+        content = b'{"id":"abc"}'
+
+        def json(self):
+            return {"id": "abc"}
+
+    monkeypatch.setattr(mailer.requests, "post",
+                        lambda url, **kw: (captured.update({"url": url, "kw": kw}), FakeResp())[1])
+
+    ok, detail = mailer.send_email_report("reader@example.com", "Subj", text="Body")
+    assert ok is True
+    assert captured["kw"]["headers"]["Authorization"] == "Bearer re_test_123"
+    payload = captured["kw"]["json"]
+    assert payload["to"] == ["reader@example.com"]
+    assert payload["subject"] == "Subj"
+    assert payload["text"] == "Body"
+    assert payload["from"] == "onboarding@resend.dev"
+
+
+def test_send_email_via_resend_reports_api_error(monkeypatch):
+    import mailer
+
+    monkeypatch.setenv("RESEND_API_KEY", "re_test_123")
+
+    class FakeResp:
+        status_code = 401
+        content = b'{"message":"missing api key"}'
+
+        def json(self):
+            return {"message": "missing api key"}
+
+    monkeypatch.setattr(mailer.requests, "post", lambda url, **kw: FakeResp())
+
+    ok, detail = mailer.send_email_report("reader@example.com", "Subj", text="Body")
+    assert ok is False
+    assert "401" in detail
 
 
 # ---------- send test email ----------
@@ -126,7 +170,7 @@ def test_send_test_email_requires_smtp(client, monkeypatch):
     set_prefs(client, email="reader@example.com")
     resp = client.post("/api/user/preferences/send-test")
     assert resp.status_code == 400
-    assert "SMTP" in resp.get_json()["error"]
+    assert "Email isn't configured" in resp.get_json()["error"]
 
 
 def test_send_test_email_requires_auth(raw_client):

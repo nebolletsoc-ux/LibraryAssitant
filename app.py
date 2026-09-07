@@ -349,7 +349,7 @@ def send_test_email():
     if not user.email:
         return jsonify({"error": "Add an email address first"}), 400
     if not mailer.is_enabled():
-        return jsonify({"error": "SMTP isn't configured on this server"}), 400
+        return jsonify({"error": "Email isn't configured on this server"}), 400
     ok, detail = mailer.send_email_report(
         user.email,
         "MyNextRead test email",
@@ -369,7 +369,7 @@ def _user_preferences(user):
         "email": user.email,
         "notify_on_available": user.notify_on_available,
         "weekly_digest": user.weekly_digest,
-        "smtp_enabled": mailer.is_enabled(),
+        "email_enabled": mailer.is_enabled(),
     }
 
 
