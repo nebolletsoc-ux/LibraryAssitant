@@ -37,3 +37,25 @@ if your crontab doesn't handle backslashes.)
 Run once by hand (prints how many emails were sent):
 
   ./.venv/bin/python send_digest.py            # with the env vars above set
+
+--- Optional: free custom sender domain ------------------------------------
+
+Resend sends "from" onboarding@resend.dev by default (fine for emailing
+yourself). To use your own sender address without paying for a domain, get a
+free subdomain that lets you add TXT/CNAME records (freedns.afraid.org is the
+most reliable; duckdns.org also works):
+
+  1. Sign up at https://freedns.afraid.org and register a free subdomain, e.g.
+     mynextread.mooo.com.
+  2. In Resend -> Domains -> Add Domain, enter that subdomain. Resend shows
+     ~3 records to add (verification TXT, SPF TXT, DKIM CNAME/TXT).
+  3. Add each record in afraid.org's control panel (record type TXT or CNAME;
+     the target lives under the subdomain itself).
+  4. Wait for Resend to verify the domain (usually minutes), then set in
+     Render -> Environment and on the cron job/Mac crontab:
+       EMAIL_FROM=MyNextRead <me@mynextread.mooo.com>
+  5. Save; Render redeploys. "Send test email" in Settings now shows the new
+     sender.
+
+(Alternative: skip all this. Since every recipient is your own address,
+onboarding@resend.dev is invisible to anyone else. Real domains are ~$10/yr.)
