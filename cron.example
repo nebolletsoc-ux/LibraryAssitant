@@ -1,0 +1,39 @@
+Weekly digest scheduler configuration
+=====================================
+
+The weekly digest is driven by `send_digest.py` (run from anywhere that can
+reach the database). It emails every user who has "Weekly availability digest"
+turned on a list of their currently available books. Pick ONE schedule below.
+
+--- Option A: Render Cron Job ----------------------------------------------
+
+Dashboard -> New -> Cron Job
+  Repository        : this repo, branch `phase1-standalone-tbr`
+  Build command     : pip install -r requirements.txt
+  Run command       : .venv/bin/python send_digest.py
+  Schedule (cron)   : 0 9 * * 1                  # 9:00 AM Mondays
+
+Environment (copy from the web service; Render does NOT inherit them):
+  DATABASE_URL      <same Postgres URL as the web service>
+  RESEND_API_KEY    <key used by the web service>
+  EMAIL_FROM        <optional, if a Resend domain is verified>
+  SECRET_KEY        <optional; send_digest.py only needs DATABASE_URL + email>
+
+--- Option B: macOS launchd / crontab ---------------------------------------
+
+Add to `crontab -e`:
+
+  0 9 * * 1 cd "/Users/orangeimac/Documents/LibraryAssistant" \
+    && DATABASE_URL="<your-postgres-url>" \
+       RESEND_API_KEY="<your-resend-key>" \
+       ./.venv/bin/python send_digest.py \
+       >> /tmp/mynextread_digest.log 2>&1
+
+(Cron runs sh, so the `\` line continuations must be kept on ONE logical line
+if your crontab doesn't handle backslashes.)
+
+--- Verify ----------------------------------------------------------------
+
+Run once by hand (prints how many emails were sent):
+
+  ./.venv/bin/python send_digest.py            # with the env vars above set
