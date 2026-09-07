@@ -82,18 +82,32 @@ def test_smtp_enabled_reflects_environment(client, monkeypatch):
 def test_send_test_email(client, monkeypatch):
     import mailer
 
-    calls = []
+    sent = []
     monkeypatch.setattr(mailer, "is_enabled", lambda: True)
-    monkeypatch.setattr(mailer, "submit_email",
-                        lambda to, subject, text="", html=None: calls.append((to, subject, text)))
+    monkeypatch.setattr(
+        mailer, "send_email_report",
+        lambda to, subject, html=None, text="": (sent.append((to, subject, text)), ("ok", True))[-1],
+    )
     set_prefs(client, email="reader@example.com")
 
     resp = client.post("/api/user/preferences/send-test")
     assert resp.status_code == 200
     assert resp.get_json()["sent"] is True
-    assert len(calls) == 1
-    assert calls[0][0] == "reader@example.com"
-    assert "test email" in calls[0][1].lower()
+    assert sent[0][0] == "reader@example.com"
+    assert "test email" in sent[0][1].lower()
+
+
+def test_send_test_email_reports_failure(client, monkeypatch):
+    import mailer
+
+    monkeypatch.setattr(mailer, "is_enabled", lambda: True)
+    monkeypatch.setattr(mailer, "send_email_report",
+                        lambda to, subject, html=None, text="": (False, "530 auth failed"))
+    set_prefs(client, email="reader@example.com")
+
+    resp = client.post("/api/user/preferences/send-test")
+    assert resp.status_code == 502
+    assert "530 auth failed" in resp.get_json()["error"]
 
 
 def test_send_test_email_requires_address(client, monkeypatch):

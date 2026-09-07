@@ -40,12 +40,38 @@ def is_enabled():
     return _smtp_config() is not None
 
 
+def _deliver(cfg, msg):
+    if cfg["port"] == 465:
+        with smtplib.SMTP_SSL(cfg["host"], cfg["port"], timeout=20) as smtp:
+            if cfg["user"]:
+                smtp.login(cfg["user"], cfg["password"])
+            smtp.send_message(msg)
+    else:
+        with smtplib.SMTP(cfg["host"], cfg["port"], timeout=20) as smtp:
+            smtp.ehlo()
+            smtp.starttls()
+            smtp.ehlo()
+            if cfg["user"]:
+                smtp.login(cfg["user"], cfg["password"])
+            smtp.send_message(msg)
+
+
 def send_email(to, subject, html=None, text=""):
-    """Send one message synchronously. Returns True on success, never raises."""
+    """Send one message. Returns True on success, never raises."""
+    ok, _ = send_email_report(to, subject, html, text)
+    return ok
+
+
+def send_email_report(to, subject, html=None, text=""):
+    """Send one message, returning (ok, detail) so callers can show errors.
+
+    The periodic sends stay fire-and-forget, but the Settings "Send test
+    email" button uses this to surface a real SMTP error to the user.
+    """
     cfg = _smtp_config()
     if not cfg:
         logger.info("Email skipped: SMTP_HOST not configured (to=%s subject=%s)", to, subject)
-        return False
+        return False, "SMTP is not configured (SMTP_HOST unset)"
 
     msg = EmailMessage()
     msg["Subject"] = subject
@@ -57,24 +83,12 @@ def send_email(to, subject, html=None, text=""):
         msg.add_alternative(html, subtype="html")
 
     try:
-        if cfg["port"] == 465:
-            with smtplib.SMTP_SSL(cfg["host"], cfg["port"], timeout=20) as smtp:
-                if cfg["user"]:
-                    smtp.login(cfg["user"], cfg["password"])
-                smtp.send_message(msg)
-        else:
-            with smtplib.SMTP(cfg["host"], cfg["port"], timeout=20) as smtp:
-                smtp.ehlo()
-                smtp.starttls()
-                smtp.ehlo()
-                if cfg["user"]:
-                    smtp.login(cfg["user"], cfg["password"])
-                smtp.send_message(msg)
+        _deliver(cfg, msg)
         logger.info("Email sent to %s: %s", to, subject)
-        return True
+        return True, "sent"
     except Exception as e:  # noqa: BLE001 - a mail failure must never break a scan
         logger.error("Email failed to %s (%s): %s", to, subject, e)
-        return False
+        return False, str(e)
 
 
 def submit_email(to, subject, html=None, text=""):

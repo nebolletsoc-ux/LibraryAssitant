@@ -2318,11 +2318,10 @@
                 if (!save.ok) throw new Error("save failed");
                 userPrefs = await save.json();
                 const resp = await fetch(`${API_BASE}/user/preferences/send-test`, { method: "POST" });
-                if (resp.status === 400) {
+                if (!resp.ok) {
                     const err = await resp.json().catch(() => ({}));
                     throw new Error(err.error || "Couldn't send");
                 }
-                if (!resp.ok) throw new Error("send failed");
                 showToast("Test email sent — check your inbox");
             } catch (e) {
                 showToast(e.message || "Failed to send test email", "error");
