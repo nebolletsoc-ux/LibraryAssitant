@@ -104,11 +104,11 @@ with app.app_context():
         _user_alters.append("ALTER TABLE users ADD COLUMN email VARCHAR(255)")
     if "notify_on_available" not in _users_cols:
         _user_alters.append(
-            "ALTER TABLE users ADD COLUMN notify_on_available BOOLEAN NOT NULL DEFAULT 1"
+            "ALTER TABLE users ADD COLUMN notify_on_available BOOLEAN NOT NULL DEFAULT TRUE"
         )
     if "weekly_digest" not in _users_cols:
         _user_alters.append(
-            "ALTER TABLE users ADD COLUMN weekly_digest BOOLEAN NOT NULL DEFAULT 0"
+            "ALTER TABLE users ADD COLUMN weekly_digest BOOLEAN NOT NULL DEFAULT FALSE"
         )
     for _stmt in _user_alters:
         db.session.execute(_text(_stmt))
