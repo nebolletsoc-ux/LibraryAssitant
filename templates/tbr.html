@@ -1124,6 +1124,21 @@
             margin-bottom: 0;
         }
         .auth-btn-secondary:hover { background: #F8FAFC; opacity: 1; }
+        .auth-legal {
+            margin: 14px 0 0;
+            font-size: 12px;
+            color: #A8A29E;
+            text-align: center;
+        }
+        .auth-legal a { color: #78716C; text-decoration: underline; }
+        a.pill-btn { text-decoration: none; }
+        .legal-links {
+            margin: 10px 0 6px;
+            font-size: 12px;
+            color: #A8A29E;
+            text-align: center;
+        }
+        .legal-links a { color: #A8A29E; text-decoration: underline; }
     </style>
 </head>
 <body>
@@ -1132,11 +1147,13 @@
             <img class="auth-logo" src="{{ url_for('static', filename='owl icon2.PNG') }}" alt="MyNextRead">
             <h1 class="h-serif">MyNextRead</h1>
             <p class="auth-sub">Sign in to your reading list</p>
+            <input id="auth-website" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;">
             <input id="auth-username" class="auth-input" type="text" placeholder="Username" autocomplete="username">
             <input id="auth-password" class="auth-input" type="password" placeholder="Password" autocomplete="current-password">
             <p id="auth-error" class="auth-error" hidden></p>
             <button id="auth-login" class="auth-btn" type="button">Log in</button>
             <button id="auth-register" class="auth-btn auth-btn-secondary" type="button">Create account</button>
+            <p class="auth-legal"><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
         </div>
     </div>
     <div id="app">
@@ -1148,6 +1165,10 @@
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                         Import
                     </button>
+                    <a class="pill-btn" id="export-btn" href="/api/books/export.csv" title="Export reading list (CSV)">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Export
+                    </a>
                     <button class="pill-btn" id="refresh-btn" title="Recheck availability">
                         <svg id="refresh-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
                         <span id="refresh-label">Recheck</span>
@@ -1219,6 +1240,7 @@
                 <button class="footer-btn" id="clear-tbr">Clear entire reading list</button>
                 <button class="footer-btn" id="settings-btn">Settings</button>
                 <button class="footer-btn" id="logout-btn" title="Log out" style="display:none;">Log out</button>
+                <p class="legal-links"><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
             </div>
         </div>
     </div>
@@ -1338,7 +1360,9 @@
                 return;
             }
             try {
-                const data = await authRequest(`/api/auth/${mode}`, { username, password }, btn);
+                const body = { username, password };
+                if (mode === "register") body.website = document.getElementById("auth-website").value.trim();
+                const data = await authRequest(`/api/auth/${mode}`, body, btn);
                 currentUser = data.user;
                 document.getElementById("auth-password").value = "";
                 await refreshSession();
@@ -2264,7 +2288,13 @@
                 ${p.email_enabled ? `
                 <div style="text-align:center; padding-top: 0;">
                     <button class="footer-btn" id="settings-test" type="button">Send test email</button>
-                </div>` : ""}`;
+                </div>` : ""}
+                <div style="text-align:center; padding-top: 18px; border-top: 1px solid #E7E5E4; margin-top: 18px;">
+                    <a class="footer-btn" href="/api/books/export.csv" style="text-decoration:none;">Download my list (CSV)</a>
+                </div>
+                <div style="text-align:center; padding-top: 6px;">
+                    <button class="footer-btn" id="settings-delete" type="button" style="color:#EF4444;">Delete my account</button>
+                </div>`;
 
             document.getElementById("settings-close-inner").addEventListener("click", () =>
                 closeSheet(document.getElementById("settings-sheet")));
@@ -2276,8 +2306,31 @@
                 });
             });
             document.getElementById("settings-save").addEventListener("click", saveSettings);
+            document.getElementById("settings-delete").addEventListener("click", deleteAccount);
             if (p.email_enabled) {
                 document.getElementById("settings-test").addEventListener("click", sendTestEmail);
+            }
+        }
+
+        async function deleteAccount() {
+            if (!confirm("Delete your account permanently? Your reading list and preferences will be removed.")) return;
+            if (!confirm("This can\u2019t be undone. Delete everything?")) return;
+            try {
+                const resp = await fetch(`${API_BASE}/auth/account`, {
+                    method: "DELETE",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ confirm: "delete_account" }),
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok) throw new Error(data.error || "Couldn\u2019t delete account");
+                currentUser = null;
+                allBooks = [];
+                libraryConfigs = [];
+                setAuthUI();
+                closeSheet(document.getElementById("settings-sheet"));
+                showToast("Account deleted");
+            } catch (e) {
+                showToast(`Error: ${e.message}`, "error");
             }
         }
 

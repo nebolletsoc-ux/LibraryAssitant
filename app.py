@@ -7,14 +7,16 @@ import secrets
 import threading
 import time
 import uuid
+from collections import defaultdict
 from datetime import datetime, timezone
 
 import requests
 from requests import RequestException
 from concurrent.futures import ThreadPoolExecutor
 
-from flask import Flask, render_template, request, jsonify, redirect, url_for, session, g
+from flask import Flask, Response, render_template, request, jsonify, redirect, url_for, session, g
 from sqlalchemy.orm import joinedload
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from models import db, Book, UserBook, Availability, LibraryConfig, User
@@ -24,6 +26,15 @@ import mailer
 
 
 app = Flask(__name__)
+
+# Render (and most hosts) terminate TLS in front of the app, so the client IP
+# arrives as X-Forwarded-For and the scheme as X-Forwarded-Proto. Let Werkzeug
+# trust one hop so request.remote_addr / request.is_secure are real values
+# (needed for per-IP rate limiting and the Secure session cookie below).
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
 # Session signing key is resolved inside the app context below (after the DB
 # is ready), from SECRET_KEY env var or a random per-deployment secret stored
@@ -147,6 +158,17 @@ with app.app_context():
 # anyone without the password gets a browser login prompt, any username works.
 APP_PASSWORD = os.environ.get("APP_PASSWORD")
 
+# STEP 2 of the public-release roadmap: the web tier must actually send mail.
+# The code already sends via Resend when RESEND_API_KEY is set; warn loudly
+# if that key is configured but no verified sender address was provided, so a
+# deployment can't silently send from the restricted onboarding@resend.dev.
+if mailer._resend_key() and not mailer._from_addr():
+    print(
+        "WARNING: RESEND_API_KEY is set but EMAIL_FROM is not. Emails will be "
+        "sent from onboarding@resend.dev (Resend 'Restricted' mode). Set "
+        "EMAIL_FROM once your sender domain is verified (see cron.example)."
+    )
+
 
 @app.after_request
 def no_cache(response):
@@ -160,6 +182,9 @@ def no_cache(response):
     Also sets the CSRF double-submit cookie if the client doesn't have one
     yet. It lives in a plain (non-HttpOnly) cookie so the JS can read it back
     and echo it as the X-CSRF-Token header on state-changing API requests.
+
+    Security headers live here too: CSP as tight as the inline-script UI
+    allows, plus busy-header / referrer hardening for the public release.
     """
     if "csrf_token" not in request.cookies:
         response.set_cookie(
@@ -167,20 +192,49 @@ def no_cache(response):
             secrets.token_urlsafe(32),
             httponly=False,
             samesite="Lax",
+            secure=request.is_secure,
             max_age=60 * 60 * 24 * 30,
         )
     response.headers["Cache-Control"] = "no-store"
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "same-origin")
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; "
+        "font-src 'self' data:; connect-src 'self'; object-src 'none'; "
+        "base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+    )
+    # Read the Secure flag here, after app.after_request handlers run but
+    # before Flask persists the session cookie: HTTPS (i.e. any real
+    # deployment) gets Secure=True, local HTTP and the test client stay plain.
+    # Set SESSION_COOKIE_SECURE=0 to force it off behind a plain-HTTP proxy.
+    app.config["SESSION_COOKIE_SECURE"] = bool(
+        request.is_secure and os.environ.get("SESSION_COOKIE_SECURE", "1") != "0"
+    )
     return response
 
 
-PUBLIC_PATHS = {"/healthz", "/", "/tbr", "/favicon.ico"}
+PUBLIC_PATHS = {"/healthz", "/", "/tbr", "/favicon.ico", "/terms", "/privacy"}
 
 
 def _is_public_path(path):
     if path in PUBLIC_PATHS:
         return True
     # Auth endpoints must stay reachable before a user has a session.
-    return path.startswith("/api/auth/")
+    if path.startswith("/api/auth/"):
+        return True
+    # Cron/webhook endpoints authenticate with their own secret token.
+    return path.startswith("/api/system/")
+
+
+def _not_software_wanting_password(path):
+    """Paths that stay open even when the optional APP_PASSWORD gate is on."""
+    if path == "/healthz":
+        return True
+    if path.startswith("/api/system/"):
+        return True
+    return path in ("/terms", "/privacy")
 
 
 def _current_user_id():
@@ -239,11 +293,11 @@ def _adopt_legacy_user_rows(user_id):
     """Claim the pre-accounts data for the very first account.
 
     Before accounts existed everything was stored under the implied
-    user_id=1 (books, per-book row, library config). When the first account
-    is created, those rows become theirs. If that account happened to get
-    id=1 (fresh database), nothing needs moving — the rows already belong
-    to them. Later accounts must never adopt: rows under id=1 stop being
-    "unowned" the moment a first account exists (even when its id is 1).
+    user_id=1 (books, per-book row, library config). When the FIRST account
+    is registered on a legacy database this moves those rows to them, but
+    ONLY when the operator opted in with ADOPT_LEGACY_ROWS=1 — that flag is
+    deliberately off by default so a stranded pre-accounts list can't be
+    claimed by an unrelated first signup on a public deployment.
     """
     if user_id == 1:
         return
@@ -258,9 +312,96 @@ def _adopt_legacy_user_rows(user_id):
         db.session.commit()
 
 
+# Per-IP throttle for the auth endpoints so public signups don't invite bots.
+# In-memory per-process is fine on single-worker deploys; note it in runbook.
+_AUTH_RATE_LIMIT_PER_WINDOW = 8
+_AUTH_RATE_WINDOW_SECONDS = 60
+_rate_hits = defaultdict(list)  # "{ip}|{path}" -> [timestamps]
+
+
+def _auth_rate_limited(bucket):
+    now = time.time()
+    hits = [t for t in _rate_hits[bucket] if now - t < _AUTH_RATE_WINDOW_SECONDS]
+    _rate_hits[bucket] = hits
+    if len(hits) >= _AUTH_RATE_LIMIT_PER_WINDOW:
+        return True
+    _rate_hits[bucket].append(now)
+    return False
+
+
+def _rate_limited_response():
+    resp = jsonify({"error": "Too many attempts. Please wait a minute and try again."})
+    resp.status_code = 429
+    resp.headers["Retry-After"] = str(_AUTH_RATE_WINDOW_SECONDS)
+    return resp
+
+
+# Account lockout persisted in app_settings so it survives multi-worker and
+# restarts (unlike the per-IP throttle above).
+_MAX_FAILED_LOGINS = 10
+_LOCKOUT_SECONDS = 15 * 60
+
+
+def _login_fail_record(username):
+    row = db.session.execute(db.text(
+        "SELECT value FROM app_settings WHERE key = :k"
+    ), {"k": f"login_fail:{username}"}).first()
+    if not row:
+        return {"count": 0, "until": 0}
+    try:
+        return json.loads(row[0])
+    except ValueError:
+        return {"count": 0, "until": 0}
+
+
+def _save_login_fail(username, record):
+    db.session.execute(db.text(
+        "INSERT INTO app_settings (key, value) VALUES (:k, :v) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    ), {"k": f"login_fail:{username}", "v": json.dumps(record)})
+    db.session.commit()
+
+
+def _clear_login_fail(username):
+    db.session.execute(db.text(
+        "DELETE FROM app_settings WHERE key = :k"
+    ), {"k": f"login_fail:{username}"})
+    db.session.commit()
+
+
+def _record_login_failure(username):
+    record = _login_fail_record(username)
+    now = time.time()
+    if record.get("until") and now < record["until"]:
+        return  # already locked; keep the lock
+    record["count"] = record.get("count", 0) + 1
+    if record["count"] >= _MAX_FAILED_LOGINS:
+        record["until"] = now + _LOCKOUT_SECONDS
+    _save_login_fail(username, record)
+
+
+def _account_locked(username):
+    record = _login_fail_record(username)
+    until = record.get("until") or 0
+    if until and time.time() < until:
+        return True
+    if until:
+        _clear_login_fail(username)
+    return False
+
+
 @app.route("/api/auth/register", methods=["POST"])
 def register():
     data = request.get_json() or {}
+
+    # Honeypot: real browsers never send "website" (it's hidden off-screen).
+    # Bots that auto-fill every field get a fake success and no account.
+    if (data.get("website") or "").strip():
+        return jsonify({"user": {"id": 0, "username": (data.get("username") or "")[:20]}}), 201
+
+    if _auth_rate_limited(f"{request.remote_addr}|register"):
+        return _rate_limited_response()
+
     username = (data.get("username") or "").strip()
     password = data.get("password") or ""
     if not username or not password:
@@ -276,7 +417,9 @@ def register():
     user = User(username=username, password_hash=generate_password_hash(password))
     db.session.add(user)
     db.session.flush()
-    if first_user:
+    # Claiming a pre-accounts reading list is opt-in (ADOPT_LEGACY_ROWS=1) so a
+    # public deployment can't hand a stranded user_id=1 list to a stranger.
+    if first_user and os.environ.get("ADOPT_LEGACY_ROWS", "0") == "1":
         _adopt_legacy_user_rows(user.id)
     db.session.commit()
 
@@ -286,12 +429,26 @@ def register():
 
 @app.route("/api/auth/login", methods=["POST"])
 def login():
+    if _auth_rate_limited(f"{request.remote_addr}|login"):
+        return _rate_limited_response()
+
     data = request.get_json() or {}
     username = (data.get("username") or "").strip()
     password = data.get("password") or ""
+
+    if _account_locked(username):
+        resp = jsonify({"error": "Account temporarily locked due to too many failed attempts."})
+        resp.status_code = 429
+        resp.headers["Retry-After"] = str(_LOCKOUT_SECONDS)
+        return resp
+
     user = User.query.filter_by(username=username).first()
     if not user or not check_password_hash(user.password_hash, password):
+        if user:
+            _record_login_failure(username)
         return jsonify({"error": "Invalid username or password"}), 401
+
+    _clear_login_fail(username)
     session["user_id"] = user.id
     return jsonify({"user": user.to_dict()}), 200
 
@@ -300,6 +457,58 @@ def login():
 def logout():
     session.clear()
     return jsonify({"ok": True}), 200
+
+
+@app.route("/api/auth/account", methods=["DELETE"])
+def delete_account():
+    """Permanently delete the current account and its data.
+
+    Removes the user, their reading-list rows, library config, and any Book
+    records that no other account references (their availability cache goes
+    with them). Requires {"confirm": "delete_account"} so it can't be fired
+    by accident; CSRF-protected like every mutating /api route.
+    """
+    data = request.get_json(silent=True) or {}
+    if data.get("confirm") != "delete_account":
+        return jsonify({"error": "Confirmation required"}), 400
+
+    user = getattr(g, "user", None)
+    if not user:
+        return jsonify({"error": "Authentication required"}), 401
+
+    try:
+        removed_book_ids = {
+            ub.book_id
+            for ub in UserBook.query.filter_by(user_id=user.id).all()
+        }
+        UserBook.query.filter_by(user_id=user.id).delete()
+        LibraryConfig.query.filter_by(user_id=user.id).delete()
+
+        # Drop Book rows that now have no owners left (their Availability rows
+        # cascade with them); books shared with other accounts are kept.
+        orphans = (
+            Book.query
+            .outerjoin(UserBook, UserBook.book_id == Book.id)
+            .group_by(Book.id)
+            .having(db.func.count(UserBook.id) == 0)
+            .all()
+        )
+        orphan_ids = {b.id for b in orphans}
+        for book in orphans:
+            db.session.delete(book)
+
+        db.session.delete(user)
+        db.session.commit()
+        session.clear()
+        return jsonify({
+            "ok": True,
+            "deleted_books": len(orphan_ids),
+            "removed_from_list": len(removed_book_ids),
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting account: {e}")
+        return jsonify({"error": "Failed to delete account"}), 500
 
 
 @app.route("/api/auth/me", methods=["GET"])
@@ -428,12 +637,36 @@ def _run_weekly_digest():
     return sent
 
 
+@app.route("/api/system/digest", methods=["POST"])
+def system_digest():
+    """Cloud-scheduler friendly digest trigger (public-release step 3).
+
+    Any scheduler that can send an HTTP POST with the shared CRON_TOKEN can
+    fire the weekly digest without needing database or Resend credentials:
+    cron-job.org, a Render Cron Job that curls this path, GitHub Actions, etc.
+    Without CRON_TOKEN configured the endpoint is dead (404).
+    """
+    token = os.environ.get("CRON_TOKEN")
+    if not token:
+        return jsonify({"error": "Digest webhook not configured"}), 404
+
+    supplied = (request.headers.get("X-Cron-Token") or "").strip()
+    authorization = (request.headers.get("Authorization") or "").strip()
+    if authorization.lower().startswith("bearer "):
+        supplied = authorization[7:].strip() or supplied
+    if not supplied or not hmac.compare_digest(supplied, token):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    sent = _run_weekly_digest()
+    return jsonify({"digest_sent": sent}), 200
+
+
 @app.before_request
 def require_password():
     if not APP_PASSWORD:
         return None
 
-    if request.path == "/healthz":
+    if _not_software_wanting_password(request.path):
         return None
 
     auth = request.authorization
@@ -879,6 +1112,18 @@ def tbr():
     return render_template("tbr.html")
 
 
+@app.route("/terms")
+def terms_page():
+    """Terms of use for the public deployment (reachable without logging in)."""
+    return render_template("terms.html")
+
+
+@app.route("/privacy")
+def privacy_page():
+    """Privacy policy for the public deployment (reachable without logging in)."""
+    return render_template("privacy.html")
+
+
 # ============================================================================
 # PHASE 1: STANDALONE TBR LIST — NEW API ENDPOINTS
 # ============================================================================
@@ -938,6 +1183,36 @@ def list_books():
     except Exception as e:
         print(f"Error listing books: {e}")
         return jsonify({"error": "Failed to load books"}), 500
+
+
+@app.route("/api/books/export.csv", methods=["GET"])
+def export_books_csv():
+    """Download the user's list as a CSV the import endpoint can re-import.
+
+    Uses the Goodreads export column shape (Title, Author, Exclusive Shelf,
+    ISBN13) because load_books accepts it and it preserves the ISBN.
+    """
+    user_books = (
+        UserBook.query.options(joinedload(UserBook.book))
+        .filter_by(user_id=_current_user_id(), status="tbr")
+        .all()
+    )
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(["Title", "Author", "Exclusive Shelf", "ISBN13"])
+    for user_book in user_books:
+        book = user_book.book
+        if not book:
+            continue
+        writer.writerow([book.title, book.author, "to-read", book.isbn or ""])
+    payload = buffer.getvalue()
+    return Response(
+        payload,
+        mimetype="text/csv",
+        headers={
+            "Content-Disposition": 'attachment; filename="mynextread-list.csv"'
+        },
+    )
 
 
 @app.route("/api/books/search", methods=["POST"])
@@ -1133,7 +1408,7 @@ def book_synopsis(user_book_id):
     and a persisted cache on the Book record) the first time the detail
     sheet is opened.
     """
-    user_book = UserBook.query.filter_by(id=user_book_id).first()
+    user_book = UserBook.query.filter_by(id=user_book_id, user_id=_current_user_id()).first()
     if not user_book or not user_book.book:
         return jsonify({"error": "Book not found"}), 404
 

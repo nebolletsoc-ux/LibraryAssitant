@@ -32,6 +32,26 @@ Add to `crontab -e`:
 (Cron runs sh, so the `\` line continuations must be kept on ONE logical line
 if your crontab doesn't handle backslashes.)
 
+--- Option C: webhook digest (no DB/email credentials needed) ----------------
+
+A plain HTTP POST can trigger the same digest with just one shared token, so
+ANY scheduler can fire it - cron-job.org, GitHub Actions, a Render Cron Job
+that curl's it, even a friend's machine. It only needs CRON_TOKEN, which the
+web service already has in its environment.
+
+1. Generate the token once and add it to Render -> Environment (web service):
+     python -c "import secrets; print(secrets.token_urlsafe(32))"
+   (the same value goes in the scheduler job below)
+2. Render Cron Job (or any HTTP-capable scheduler):
+     Run command   : curl -fsS -X POST \
+                       -H "Authorization: Bearer $CRON_TOKEN" \
+                       https://libraryassitant.onrender.com/api/system/digest
+     Schedule      : 0 9 * * 1
+   With cron-job.org, paste the URL and set this request header:
+     Authorization: Bearer <token>
+3. The endpoint responds 200 with {"digest_sent": N}; wrong or missing
+   tokens get 401, and the endpoint is a 404 whenever CRON_TOKEN is unset.
+
 --- Verify ----------------------------------------------------------------
 
 Run once by hand (prints how many emails were sent):

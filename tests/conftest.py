@@ -103,6 +103,14 @@ def _reset_db(request, app_context, client):
             db.session.query(model).delete()
         db.session.commit()
 
+        # Forget per-IP auth-throttle state and brute-force lockouts between
+        # tests (the app_settings table also holds secret_key, so only the
+        # login_fail rows are scrubbed, never the whole table).
+        from app import _rate_hits
+        _rate_hits.clear()
+        db.session.execute(db.text("DELETE FROM app_settings WHERE key LIKE 'login_fail:%'"))
+        db.session.commit()
+
         if not no_auth:
             user = User(
                 username="tester",
