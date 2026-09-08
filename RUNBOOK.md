@@ -20,9 +20,17 @@ All three appeared in chat, so treat them as compromised.
 
 **a) Resend API key** — https://resend.com → API Keys → create a new key,
 delete the old one.
-**b) Neon DB password** — https://console.neon.tech → your project → Settings →
-Database → "New password". Keep the same user/database; the URL's password part
-changes.
+**b) Neon DB password** — https://console.neon.tech → your project → **Branches**
+→ select the branch your app connects to (the default branch) → **Roles &
+Databases** → find the role your connection uses (the project's role is named
+after the database, e.g. `neondb_owner`) → its **⋯ menu → Reset password** →
+**Reset**. Also reachable from the Project Dashboard → **Connect** → role menu →
+Reset password.
+
+The password shows only once — copy it, and the new `DATABASE_URL` from the
+same Connect widget (host/db/role stay the same; only the password changes).
+The old password stops working immediately, so update Render and the crontab
+right after resetting (a brief reconnect on the next request is expected).
 **c) Gmail app password (if any SMTP fallback still uses it)** — Google Account →
 Security → App passwords → create a new one; click **Revoke** on every old one.
 If nothing uses SMTP anymore, just revoke.
