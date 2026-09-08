@@ -20,11 +20,13 @@ All three appeared in chat, so treat them as compromised.
 
 **a) Resend API key** — https://resend.com → API Keys → create a new key,
 delete the old one.
-**b) Neon DB password** — https://console.neon.tech → your project → **Branches**
-→ select the branch your app connects to (the default branch) → **Roles &
-Databases** → find the role your connection uses (the project's role is named
-after the database, e.g. `neondb_owner`) → its **⋯ menu → Reset password** →
-**Reset**. Also reachable from the Project Dashboard → **Connect** → role menu →
+**b) Neon DB password** — https://console.neon.tech → your project → in the
+**left sidebar**, use the **BRANCH** selector to pick the branch your app
+connects to (e.g. Production) → under the **Postgres database** sidebar group
+select **Roles** → find the role your connection uses (the project's role is
+named after the database, e.g. `neondb_owner`) → its **⋯ menu → Reset
+password** → **Reset**. No "Roles" entry in the sidebar? Use the Project
+Dashboard → **Connect** → role selector in the connection-string widget →
 Reset password.
 
 The password shows only once — copy it, and the new `DATABASE_URL` from the
