@@ -14,6 +14,21 @@ import requests
 from requests import RequestException
 from concurrent.futures import ThreadPoolExecutor
 
+# Optional exception monitoring (roadmap Step 10). Enabling is purely env-led:
+# without SENTRY_DSN nothing is imported or sent, so local runs and the test
+# suite stay untouched.
+SENTRY_DSN = os.environ.get("SENTRY_DSN")
+if SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.flask import FlaskIntegration
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[FlaskIntegration()],
+        traces_sample_rate=0.0,
+        send_default_pii=False,
+    )
+
 from flask import Flask, Response, render_template, request, jsonify, redirect, url_for, session, g
 from sqlalchemy.orm import joinedload
 from werkzeug.middleware.proxy_fix import ProxyFix
