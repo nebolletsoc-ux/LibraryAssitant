@@ -117,6 +117,75 @@ def test_synopsis_tolerates_network_failure(client, add_book, monkeypatch):
     assert data["synopsis"] is None
 
 
+def test_synopsis_title_search_uses_doc_key_when_seed_empty(client, add_book, monkeypatch):
+    """Real Open Library search hits carry a /works/ key on the doc, not in
+    seed. Regression: empty seed arrays silently skipped the work lookup, so
+    many resolvable titles were reported as 'no synopsis'."""
+    user_book_id, _ = _add_book(client, add_book)
+
+    def fake_get(url, **kwargs):
+        if "/isbn/" in url:
+            return fake_response({"works": [], "subjects": ["Fiction"]})
+        if "/search.json" in url:
+            return fake_response({"docs": [{"key": "/works/OL9W", "seed": []}]})
+        if url.endswith("/works/OL9W.json"):
+            return fake_response({"description": "Found via doc key."})
+        return fake_response({})
+
+    monkeypatch.setattr("app.requests.get", fake_get)
+
+    resp = client.post(f"/api/books/{user_book_id}/synopsis")
+    data = resp.get_json()
+    assert resp.status_code == 200
+    assert data["synopsis"] == "Found via doc key."
+
+
+def test_synopsis_google_books_fallback_uses_api_key(client, add_book, monkeypatch):
+    user_book_id, _ = _add_book(client, add_book)
+
+    google_hits = []
+
+    def fake_get(url, **kwargs):
+        if "googleapis.com" in url:
+            google_hits.append((url, kwargs.get("params") or {}))
+            return fake_response({"items": [{"volumeInfo": {
+                "description": "A blurb from Google Books.",
+                "categories": ["Fiction"],
+            }}]})
+        return fake_response({})
+
+    monkeypatch.setattr("app.requests.get", fake_get)
+    monkeypatch.setenv("GOOGLE_BOOKS_API_KEY", "test-key")
+
+    resp = client.post(f"/api/books/{user_book_id}/synopsis")
+    data = resp.get_json()
+    assert resp.status_code == 200
+    assert data["synopsis"] == "A blurb from Google Books."
+    assert data["genre"] == "Fiction"
+    assert google_hits, "googleapis.com should be called when the key is set"
+    assert google_hits[0][1].get("key") == "test-key"
+
+
+def test_synopsis_google_books_skipped_without_api_key(client, add_book, monkeypatch):
+    """Without GOOGLE_BOOKS_API_KEY the Google endpoint must not be hit."""
+    user_book_id, _ = _add_book(client, add_book)
+
+    google_hits = []
+
+    def fake_get(url, **kwargs):
+        if "googleapis.com" in url:
+            google_hits.append(url)
+            return fake_response({"items": [{"volumeInfo": {"description": "x"}}]})
+        return fake_response({})
+
+    monkeypatch.setattr("app.requests.get", fake_get)
+    monkeypatch.delenv("GOOGLE_BOOKS_API_KEY", raising=False)
+
+    resp = client.post(f"/api/books/{user_book_id}/synopsis")
+    assert resp.get_json()["synopsis"] is None
+    assert google_hits == []
+
+
 def test_synopsis_unknown_user_book_returns_404(client):
     resp = client.post("/api/books/999999/synopsis")
     assert resp.status_code == 404

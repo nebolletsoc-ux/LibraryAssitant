@@ -813,14 +813,18 @@ def fetch_synopsis(isbn, title, author):
                 query += f" author:{author}"
             response = requests.get(
                 "https://openlibrary.org/search.json",
-                params={"q": query, "limit": 3},
+                params={"q": query, "limit": 5},
                 headers=headers,
-                timeout=4,
+                timeout=8,
             )
             response.raise_for_status()
             docs = (response.json() or {}).get("docs") or []
             for doc in docs:
-                for key in doc.get("seed") or []:
+                # Work keys appear as doc["key"] in every search hit; "seed"
+                # also lists /works/... when present but is frequently empty.
+                candidates = [doc.get("key")]
+                candidates += [s for s in (doc.get("seed") or []) if isinstance(s, str)]
+                for key in candidates:
                     if isinstance(key, str) and key.startswith("/works/"):
                         work_key = key
                         break
@@ -833,7 +837,7 @@ def fetch_synopsis(isbn, title, author):
     if work_key:
         try:
             work_url = f"https://openlibrary.org{work_key}.json"
-            response = requests.get(work_url, headers=headers, timeout=4)
+            response = requests.get(work_url, headers=headers, timeout=8)
             response.raise_for_status()
 
             work_data = response.json()
@@ -876,6 +880,40 @@ def fetch_synopsis(isbn, title, author):
 
         except Exception as e:
             print(f"Bibkeys fallback failed for '{title}': {e}")
+
+    # Fallback: Google Books, only when a free API key is configured.
+    # Open Library lacks a description for some titles; Google's volumeInfo
+    # usually has one. The unauthenticated endpoint shares a global quota that
+    # exhausts quickly, so it only runs when GOOGLE_BOOKS_API_KEY is set.
+    if not synopsis and os.environ.get("GOOGLE_BOOKS_API_KEY"):
+        try:
+            params = {
+                "q": f'intitle:"{title}"',
+                "maxResults": 3,
+                "country": "US",
+                "key": os.environ["GOOGLE_BOOKS_API_KEY"],
+            }
+            if author:
+                params["q"] += f' inauthor:"{author}"'
+            response = requests.get(
+                "https://www.googleapis.com/books/v1/volumes",
+                params=params,
+                headers=headers,
+                timeout=4,
+            )
+            response.raise_for_status()
+            items = (response.json() or {}).get("items") or []
+            for item in items:
+                desc = (item.get("volumeInfo") or {}).get("description")
+                if desc:
+                    synopsis = desc
+                    break
+            if not genre and items:
+                categories = (items[0].get("volumeInfo") or {}).get("categories")
+                if categories:
+                    genre = categories[0]
+        except Exception as e:
+            print(f"Google Books fallback failed for '{title}': {e}")
 
     return synopsis, genre
 
