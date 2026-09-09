@@ -1183,7 +1183,7 @@
             <div class="search-wrap">
                 <div class="search-box">
                     <svg class="search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                    <input type="text" id="search-input" placeholder="Search books or authors…" autocomplete="off">
+                    <input type="text" id="search-input" placeholder="Search to add a book…" autocomplete="off">
                     <button class="clear-btn" id="clear-btn" style="display:none;">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                     </button>
@@ -1223,12 +1223,12 @@
         </div>
 
         <div class="list-wrap">
+            <div id="online-results"></div>
             <div id="books-container">
                 <div class="empty-state">
                     <p class="msg">Loading…</p>
                 </div>
             </div>
-            <div id="online-results"></div>
             <div class="legend">
                 <span class="legend-item"><span class="legend-swatch available"></span>Available</span>
                 <span class="legend-item"><span class="legend-swatch waitlist"></span>Waitlist</span>
@@ -1616,12 +1616,7 @@
         }
 
         function filteredBooks() {
-            const q = searchQuery.toLowerCase();
             const filtered = allBooks.filter(ub => {
-                const title = (ub.book?.title || "").toLowerCase();
-                const author = (ub.book?.author || "").toLowerCase();
-                if (q && !title.includes(q) && !author.includes(q)) return false;
-
                 const rows = rowsFor(ub, activeFormat);
                 if (activeFormat !== "all" && rows.length === 0) return false;
                 if (availableOnly && !rows.some(r => r.available)) return false;
@@ -2411,14 +2406,12 @@
         document.getElementById("search-input").addEventListener("input", (e) => {
             searchQuery = e.target.value;
             document.getElementById("clear-btn").style.display = searchQuery ? "block" : "none";
-            renderBooks();
             renderOnlineResults();
         });
         document.getElementById("clear-btn").addEventListener("click", () => {
             searchQuery = "";
             document.getElementById("search-input").value = "";
             document.getElementById("clear-btn").style.display = "none";
-            renderBooks();
             renderOnlineResults();
         });
 
