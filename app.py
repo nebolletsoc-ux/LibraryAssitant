@@ -887,31 +887,39 @@ def fetch_synopsis(isbn, title, author):
     # exhausts quickly, so it only runs when GOOGLE_BOOKS_API_KEY is set.
     if not synopsis and os.environ.get("GOOGLE_BOOKS_API_KEY"):
         try:
-            params = {
-                "q": f'intitle:"{title}"',
-                "maxResults": 3,
-                "country": "US",
-                "key": os.environ["GOOGLE_BOOKS_API_KEY"],
-            }
+            queries = [f'intitle:"{title}"']
             if author:
-                params["q"] += f' inauthor:"{author}"'
-            response = requests.get(
-                "https://www.googleapis.com/books/v1/volumes",
-                params=params,
-                headers=headers,
-                timeout=4,
-            )
-            response.raise_for_status()
-            items = (response.json() or {}).get("items") or []
-            for item in items:
-                desc = (item.get("volumeInfo") or {}).get("description")
+                queries[0] += f' inauthor:"{author}"'
+            queries.append(f'"{title}" {author}' if author else f'"{title}"')
+            for q in queries:
+                params = {
+                    "q": q,
+                    "maxResults": 8,
+                    "key": os.environ["GOOGLE_BOOKS_API_KEY"],
+                }
+                response = requests.get(
+                    "https://www.googleapis.com/books/v1/volumes",
+                    params=params,
+                    headers=headers,
+                    timeout=4,
+                )
+                response.raise_for_status()
+                items = (response.json() or {}).get("items") or []
+                if not genre and items:
+                    categories = (items[0].get("volumeInfo") or {}).get("categories")
+                    if categories:
+                        genre = categories[0]
+                desc = next(
+                    (
+                        (it.get("volumeInfo") or {}).get("description") or None
+                        for it in items
+                        if (it.get("volumeInfo") or {}).get("description")
+                    ),
+                    None,
+                )
                 if desc:
                     synopsis = desc
                     break
-            if not genre and items:
-                categories = (items[0].get("volumeInfo") or {}).get("categories")
-                if categories:
-                    genre = categories[0]
         except Exception as e:
             print(f"Google Books fallback failed for '{title}': {e}")
 

@@ -50,6 +50,7 @@ Open http://localhost:5000. A local SQLite database is created at
 | `EMAIL_FROM`            | no       | Sender for Resend once a domain is verified              |
 | `CRON_TOKEN`            | no       | Shared secret for the `/api/system/digest` webhook       |
 | `SENTRY_DSN`            | no       | Enables exception reporting via Sentry                   |
+| `GOOGLE_BOOKS_API_KEY`  | no       | Google Books fallback for synopses Open Library lacks    |
 | `ADOPT_LEGACY_ROWS`     | no       | `1` lets the first signup claim pre-accounts data        |
 | `SESSION_COOKIE_SECURE` | no       | `0` disables Secure session cookies behind plain HTTP    |
 
