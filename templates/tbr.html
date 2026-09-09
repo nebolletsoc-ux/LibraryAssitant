@@ -1430,7 +1430,9 @@
 
         function statusOf(ub, format) {
             const rows = rowsFor(ub, format);
-            if (rows.length === 0) return "pending";
+            if (rows.length === 0) {
+                return ub.availability_summary?.checked ? "unavailable" : "pending";
+            }
             if (rows.some(r => r.available)) return "available";
             if (rows.some(r => r.wait_text)) return "waitlist";
             return "unavailable";
@@ -1690,7 +1692,9 @@
             );
 
             const borrowHtml = rows.length === 0
-                ? `<div style="padding:12px;color:#94A3B8;text-align:center;font-size:13px;">Availability has not been checked yet.</div>`
+                ? (ub.availability_summary?.checked
+                    ? `<div style="padding:12px;color:#94A3B8;text-align:center;font-size:13px;">No copies currently available at your libraries.</div>`
+                    : `<div style="padding:12px;color:#94A3B8;text-align:center;font-size:13px;">Availability has not been checked yet.</div>`)
                 : rows.map(row => {
                     const rs = availStatus(row);
                     const isE = isEbook(row.format);
