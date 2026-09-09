@@ -20,6 +20,11 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     email = db.Column(db.String(255), nullable=True)
+    email_verified = db.Column(
+        db.Boolean, nullable=False, default=False, server_default="0"
+    )
+    email_verify_hash = db.Column(db.String(64), nullable=True)
+    email_verify_expires = db.Column(db.DateTime, nullable=True)
     notify_on_available = db.Column(
         db.Boolean, nullable=False, default=True, server_default="1"
     )

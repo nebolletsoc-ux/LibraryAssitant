@@ -1,4 +1,5 @@
 import csv
+import hashlib
 import hmac
 import io
 import json
@@ -8,7 +9,7 @@ import threading
 import time
 import uuid
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 import requests
 from requests import RequestException
@@ -230,7 +231,7 @@ def no_cache(response):
     return response
 
 
-PUBLIC_PATHS = {"/healthz", "/", "/tbr", "/favicon.ico", "/terms", "/privacy"}
+PUBLIC_PATHS = {"/healthz", "/", "/tbr", "/favicon.ico", "/terms", "/privacy", "/verify-email"}
 
 
 def _is_public_path(path):
@@ -249,7 +250,7 @@ def _not_software_wanting_password(path):
         return True
     if path.startswith("/api/system/"):
         return True
-    return path in ("/terms", "/privacy")
+    return path in ("/terms", "/privacy", "/verify-email")
 
 
 def _current_user_id():
@@ -552,7 +553,14 @@ def update_user_preferences():
     data = request.get_json() or {}
     if "email" in data:
         email = (data.get("email") or "").strip()
-        user.email = email or None
+        new_email = email or None
+        if new_email != user.email:
+            user.email = new_email
+            user.email_verified = False
+            user.email_verify_hash = None
+            user.email_verify_expires = None
+            if new_email and mailer.is_enabled():
+                _send_verification_email(user)
     if "notify_on_available" in data and isinstance(data["notify_on_available"], bool):
         user.notify_on_available = data["notify_on_available"]
     if "weekly_digest" in data and isinstance(data["weekly_digest"], bool):
@@ -591,10 +599,101 @@ def send_test_email():
 def _user_preferences(user):
     return {
         "email": user.email,
+        "email_verified": bool(getattr(user, "email_verified", False)),
+        "email_pending": bool(user.email and not user.email_verified),
         "notify_on_available": user.notify_on_available,
         "weekly_digest": user.weekly_digest,
         "email_enabled": mailer.is_enabled(),
     }
+
+
+@app.route("/api/user/preferences/resend-verification", methods=["POST"])
+def resend_verification_email():
+    """Email a fresh verification link. CSRF-protected like all mutating /api routes."""
+    user = getattr(g, "user", None)
+    if not user:
+        return jsonify({"error": "Authentication required"}), 401
+    if not user.email:
+        return jsonify({"error": "Add an email address first"}), 400
+    if user.email_verified:
+        return jsonify({"sent": True, "already_verified": True}), 200
+    if not mailer.is_enabled():
+        return jsonify({"error": "Email isn't configured on this server"}), 400
+    _send_verification_email(user)
+    db.session.commit()
+    return jsonify({"sent": True}), 200
+
+
+def _send_verification_email(user):
+    """Stamp a fresh verification token on the user and email the click-link.
+
+    The token is only ever stored as a SHA-256 hash; the mailer is a
+    fire-and-forget submit_email so the Settings save stays fast.
+    """
+    token = secrets.token_urlsafe(32)
+    user.email_verify_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    user.email_verify_expires = datetime.utcnow() + timedelta(hours=72)
+    base = request.url_root.rstrip("/")
+    link = f"{base}/verify-email?token={token}"
+    text = (
+        "Confirm your email to start receiving availability alerts and your "
+        f"weekly digest.\n\n{link}\n\nIf you didn't add this address to "
+        "MyNextRead, you can ignore this email."
+    )
+    html = (
+        "<p>Confirm your email to start receiving availability alerts and your "
+        "weekly digest.</p>"
+        '<p style="margin:24px 0"><a href="'
+        f"{link}"
+        '" style="background:#1f2937;color:#fff;padding:12px 20px;'
+        'border-radius:8px;text-decoration:none">Verify my email</a></p>'
+        "<p style="
+        '"color:#6b7280;font-size:13px">If you didn\'t add this address to '
+        "MyNextRead, you can safely ignore this email.</p>"
+    )
+    mailer.submit_email(user.email, "Verify your email for MyNextRead", text=text, html=html)
+
+
+@app.route("/verify-email")
+def verify_email():
+    """Public one-click link that marks a user's email verified.
+
+    The token is the only credential (it's random and emailed to the address
+    itself), so no session or CSRF is needed here.
+    """
+    token = (request.args.get("token") or "").strip()
+    digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    user = User.query.filter_by(email_verify_hash=digest).first()
+    page = (
+        "<!doctype html><html><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+        "<title>Email verified</title></head>"
+        "<body style='font-family:-apple-system,Segoe UI,Roboto,sans-serif;"
+        "background:#f5f5f4;display:flex;align-items:center;justify-content:center;"
+        "min-height:100vh;margin:0;padding:24px'>"
+        "<div style='background:#fff;border-radius:16px;padding:40px;max-width:420px;"
+        "box-shadow:0 10px 40px rgba(0,0,0,.08);text-align:center'>"
+    )
+    if not user or user.email_verify_expires is None or user.email_verify_expires < datetime.utcnow():
+        return Response(
+            page
+            + "<h1 style='margin-top:0'>Link invalid or expired</h1>"
+            + "<p>Head back to Settings and use “Resend verification email” "
+            "to get a fresh one.</p></div></body></html>",
+            mimetype="text/html",
+            status=400,
+        )
+    user.email_verified = True
+    user.email_verify_hash = None
+    user.email_verify_expires = None
+    db.session.commit()
+    return Response(
+        page
+        + "<h1 style='margin-top:0'>Email verified ✓</h1>"
+        + "<p>Notifications and your weekly digest are now enabled. "
+        "You can close this tab.</p></div></body></html>",
+        mimetype="text/html",
+    )
 
 
 def _run_weekly_digest():
@@ -606,6 +705,7 @@ def _run_weekly_digest():
     subscribers = (
         User.query.filter_by(weekly_digest=True)
         .filter(User.email.isnot(None))
+        .filter(User.email_verified.is_(True))
         .all()
     )
     sent = 0
@@ -1718,6 +1818,7 @@ def _notify_available(book_id, title, author, available_rows):
                 UserBook.book_id == book_id,
                 UserBook.status == "tbr",
                 User.email.isnot(None),
+                User.email_verified.is_(True),
                 User.notify_on_available.is_(True),
             )
             .distinct()

@@ -18,6 +18,7 @@ from tests.test_notifications import (
     enable_library,
     seed_availability,
     set_prefs,
+    set_reader_email,
 )
 
 
@@ -316,7 +317,8 @@ def test_digest_webhook_rejects_bad_token(client, monkeypatch):
 def test_digest_webhook_runs_digest(client, app_context, monkeypatch):
     monkeypatch.setenv("CRON_TOKEN", "right-token")
     calls = capture_emails(monkeypatch)
-    set_prefs(client, email="reader@example.com", weekly_digest=True)
+    set_prefs(client, weekly_digest=True)
+    set_reader_email(app_context)
     enable_library(client, "lapl")
     book = add_book(client)
     seed_availability(app_context, book["id"], library="lapl", available=True)

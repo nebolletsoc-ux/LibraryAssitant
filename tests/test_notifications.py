@@ -15,6 +15,21 @@ def set_prefs(client, **kwargs):
     return resp.get_json()
 
 
+def set_reader_email(app_context, email="reader@example.com", verified=True):
+    """Write the reader's email straight to the DB, bypassing the verify link.
+
+    Alert/digest tests exercise delivery (not verification), so they pretend
+    the link was already clicked instead of going through the mail round-trip.
+    """
+    from models import User, db
+
+    with app_context.app.app_context():
+        user = User.query.filter_by(username="tester").one()
+        user.email = email
+        user.email_verified = verified
+        db.session.commit()
+
+
 def capture_emails(monkeypatch):
     import mailer
 
@@ -243,7 +258,7 @@ def test_send_email_is_noop_without_backend(monkeypatch):
 
 # ---------- send test email ----------
 
-def test_send_test_email(client, monkeypatch):
+def test_send_test_email(client, app_context, monkeypatch):
     import mailer
 
     sent = []
@@ -252,7 +267,7 @@ def test_send_test_email(client, monkeypatch):
         mailer, "send_email_report",
         lambda to, subject, html=None, text="": (sent.append((to, subject, text)), ("ok", True))[-1],
     )
-    set_prefs(client, email="reader@example.com")
+    set_reader_email(app_context)
 
     resp = client.post("/api/user/preferences/send-test")
     assert resp.status_code == 200
@@ -261,13 +276,13 @@ def test_send_test_email(client, monkeypatch):
     assert "test email" in sent[0][1].lower()
 
 
-def test_send_test_email_reports_failure(client, monkeypatch):
+def test_send_test_email_reports_failure(client, app_context, monkeypatch):
     import mailer
 
     monkeypatch.setattr(mailer, "is_enabled", lambda: True)
     monkeypatch.setattr(mailer, "send_email_report",
                         lambda to, subject, html=None, text="": (False, "530 auth failed"))
-    set_prefs(client, email="reader@example.com")
+    set_reader_email(app_context)
 
     resp = client.post("/api/user/preferences/send-test")
     assert resp.status_code == 502
@@ -301,9 +316,9 @@ def test_send_test_email_requires_auth(raw_client):
 
 # ---------- availability alerts ----------
 
-def test_alert_when_book_becomes_available(client, make_result, _mock_network, monkeypatch):
+def test_alert_when_book_becomes_available(client, app_context, make_result, _mock_network, monkeypatch):
     calls = capture_emails(monkeypatch)
-    set_prefs(client, email="reader@example.com")
+    set_reader_email(app_context)
     book = add_book(client)
     book_id = book["id"]
 
@@ -395,7 +410,7 @@ def test_alert_goes_to_every_owner(client, make_result, _mock_network, monkeypat
     from models import User, UserBook, db
 
     calls = capture_emails(monkeypatch)
-    set_prefs(client, email="reader@example.com")
+    set_reader_email(app_context)
 
     book = add_book(client)
 
@@ -404,6 +419,7 @@ def test_alert_goes_to_every_owner(client, make_result, _mock_network, monkeypat
             username="other-reader",
             password_hash=generate_password_hash("whatever"),
             email="other@example.com",
+            email_verified=True,
             notify_on_available=True,
         )
         db.session.add(other)
@@ -452,7 +468,8 @@ def seed_availability(app_context, book_id, library="lapl", available=True, form
 
 def test_digest_emails_available_books(client, app_context, monkeypatch):
     calls = capture_emails(monkeypatch)
-    set_prefs(client, email="reader@example.com", weekly_digest=True)
+    set_prefs(client, weekly_digest=True)
+    set_reader_email(app_context)
     enable_library(client, "lapl")
     book = add_book(client)
     seed_availability(app_context, book["id"], library="lapl", available=True)

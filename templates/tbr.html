@@ -2262,6 +2262,15 @@
                     <button class="sheet-close" id="settings-close-inner">&times;</button>
                 </div>
                 <input id="settings-email" class="lib-input" type="email" placeholder="Email address (optional)" value="${email}">
+                ${p.email && !p.email_verified && p.email_enabled ? `
+                <div class="settings-note" id="verify-note">
+                    A verification link was sent to <b>${escapeHtml(p.email)}</b>.
+                    Click it in the email to get alerts and the weekly digest (check spam if you don\u2019t see it).
+                    <span style="display:inline-block; padding-top:4px;">
+                        <button class="footer-btn" id="settings-resend-verify" type="button" style="padding:4px 10px; font-size:12px;">Resend</button>
+                    </span>
+                </div>` : (p.email_verified ? `
+                <p class="settings-note" style="color:#15803D;">✓ Email verified</p>` : "")}
                 <div class="lib-row" style="padding-top: 16px;">
                     <div>
                         <p class="lib-name">Email when a book becomes available</p>
@@ -2308,6 +2317,10 @@
             document.getElementById("settings-delete").addEventListener("click", deleteAccount);
             if (p.email_enabled) {
                 document.getElementById("settings-test").addEventListener("click", sendTestEmail);
+            }
+            const resendBtn = document.getElementById("settings-resend-verify");
+            if (resendBtn) {
+                resendBtn.addEventListener("click", resendVerification);
             }
         }
 
@@ -2356,7 +2369,11 @@
                 if (!resp.ok) throw new Error("save failed");
                 userPrefs = await resp.json();
                 closeSheet(document.getElementById("settings-sheet"));
-                showToast("Settings saved");
+                if (userPrefs.email_pending) {
+                    showToast("Verification email sent — click the link to verify");
+                } else {
+                    showToast("Settings saved");
+                }
             } catch (e) {
                 showToast("Failed to save settings", "error");
             }
@@ -2384,6 +2401,19 @@
                 showToast("Test email sent — check your inbox");
             } catch (e) {
                 showToast(e.message || "Failed to send test email", "error");
+            }
+        }
+
+        async function resendVerification() {
+            try {
+                const resp = await fetch(`${API_BASE}/user/preferences/resend-verification`, { method: "POST" });
+                if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({}));
+                    throw new Error(err.error || "Couldn\u2019t resend");
+                }
+                showToast("Verification email sent");
+            } catch (e) {
+                showToast(e.message || "Failed to resend verification email", "error");
             }
         }
 
