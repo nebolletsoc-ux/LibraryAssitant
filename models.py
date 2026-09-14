@@ -31,6 +31,9 @@ class User(db.Model):
     weekly_digest = db.Column(
         db.Boolean, nullable=False, default=False, server_default="0"
     )
+    only_english = db.Column(
+        db.Boolean, nullable=False, default=False, server_default="0"
+    )
 
     def to_dict(self):
         return {
@@ -148,6 +151,10 @@ class Availability(db.Model):
     
     # URL to the library's listing
     url = db.Column(db.String(1000), nullable=True)
+
+    # Primary language of the edition (e.g. "English", "Spanish"), when the
+    # catalog record carries it; None means unknown.
+    language = db.Column(db.String(100), nullable=True)
     
     # When this cached result was retrieved
     checked_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
@@ -165,8 +172,9 @@ class Availability(db.Model):
             "wait_text": self.wait_text,
             "holds": self.holds,
             "wait_weeks": self.wait_weeks,
-            "url": self.url,
-            "checked_at": self.checked_at.isoformat() if self.checked_at else None,
+"url": self.url,
+        "language": self.language,
+        "checked_at": self.checked_at.isoformat() if self.checked_at else None,
         }
 
 

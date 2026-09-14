@@ -10,4 +10,5 @@ class LibraryResult:
     url: str | None = None
     holds: int | None = None
     wait_weeks: float | None = None
+    language: str | None = None
 

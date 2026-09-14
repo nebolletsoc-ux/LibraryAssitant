@@ -4,6 +4,7 @@ import hmac
 import io
 import json
 import os
+import re
 import secrets
 import threading
 import time
@@ -110,6 +111,8 @@ LIBRARY_PRESETS = {
     "ssfpl": {"key": "ssfpl", "label": "South San Francisco Public Library", "bibliocommons": "ssfpl"},
     "alameda_county": {"key": "alameda_county", "label": "Alameda County Library", "bibliocommons": "aclibrary"},
     "contra_costa_county": {"key": "contra_costa_county", "label": "Contra Costa County Library", "bibliocommons": "ccclib"},
+    "gutenberg": {"key": "gutenberg", "label": "Project Gutenberg (free ebooks)", "free": True},
+    "openlibrary": {"key": "openlibrary", "label": "Open Library (free ebooks)", "free": True},
 }
 
 # Create all tables on app startup
@@ -137,9 +140,20 @@ with app.app_context():
         _user_alters.append(
             "ALTER TABLE users ADD COLUMN weekly_digest BOOLEAN NOT NULL DEFAULT FALSE"
         )
+    if "only_english" not in _users_cols:
+        _user_alters.append(
+            "ALTER TABLE users ADD COLUMN only_english BOOLEAN NOT NULL DEFAULT FALSE"
+        )
     for _stmt in _user_alters:
         db.session.execute(_text(_stmt))
     if _user_alters:
+        db.session.commit()
+
+    _avail_cols = {c["name"] for c in _inspect(db.engine).get_columns("availability")}
+    if "language" not in _avail_cols:
+        db.session.execute(
+            _text("ALTER TABLE availability ADD COLUMN language VARCHAR(100)")
+        )
         db.session.commit()
 
     # Session signing key: prefer SECRET_KEY from the environment; otherwise
@@ -565,6 +579,8 @@ def update_user_preferences():
         user.notify_on_available = data["notify_on_available"]
     if "weekly_digest" in data and isinstance(data["weekly_digest"], bool):
         user.weekly_digest = data["weekly_digest"]
+    if "only_english" in data and isinstance(data["only_english"], bool):
+        user.only_english = data["only_english"]
     db.session.commit()
     return jsonify(_user_preferences(user)), 200
 
@@ -603,6 +619,7 @@ def _user_preferences(user):
         "email_pending": bool(user.email and not user.email_verified),
         "notify_on_available": user.notify_on_available,
         "weekly_digest": user.weekly_digest,
+        "only_english": bool(getattr(user, "only_english", False)),
         "email_enabled": mailer.is_enabled(),
     }
 
@@ -725,6 +742,7 @@ def _run_weekly_digest():
             rows = user_book.book.availability or []
             if enabled_keys:
                 rows = [a for a in rows if a.library in enabled_keys]
+            rows = [a for a in rows if _language_allowed(user, a)]
             avail_rows = [a for a in rows if a.available]
             if avail_rows:
                 available.append((user_book.book, avail_rows))
@@ -1308,17 +1326,20 @@ def list_books():
             lib.library_key
             for lib in LibraryConfig.query.filter_by(user_id=_current_user_id(), enabled=True).all()
         }
+        current_user = getattr(g, "user", None)
         books = []
         for user_book in user_books:
             book_data = user_book.to_dict_with_book()
             availability = user_book.book.availability if user_book.book else []
 
-            # Full cached rows for the frontend's borrow-options/status model:
-            # one entry per library/provider/format with holds and wait info.
             # Only include libraries that are currently enabled so deselecting
             # a library hides its (possibly stale) cached results immediately.
             if enabled_keys:
                 availability = [a for a in availability if a.library in enabled_keys]
+            availability = [
+                a for a in availability
+                if _language_allowed(current_user, a)
+            ]
             book_data["availability"] = [result.to_dict() for result in availability]
 
             # Per-format summary used by the list-view filters and icon dots.
@@ -1741,14 +1762,35 @@ def _library_search_configs():
             config["overdrive"] = library.overdrive
         if library.hoopla:
             config["hoopla"] = True
+        if library.library_key == "gutenberg":
+            config["gutenberg"] = True
+        if library.library_key == "openlibrary":
+            config["openlibrary"] = True
         configs.append(config)
     return configs
+
+
+def _language_allowed(user, row):
+    """True when a cached availability row passes the user's English-only filter.
+
+    Rows with no recorded language are kept (the catalog can't tell us).
+    """
+    if not user or not getattr(user, "only_english", False):
+        return True
+
+    language = (getattr(row, "language", None) or "").lower().strip()
+    if not language:
+        return True
+
+    tokens = [p for p in re.split(r"[,\s/;&+]+", language) if p]
+    return any(p.startswith("en") for p in tokens)
 
 
 def _refresh_availability(user_book, configs):
     """Replace cached availability for one TBR entry."""
     book = user_book.book
     results = search_libraries(book.title, book.author, configs)
+    user = User.query.get(user_book.user_id)
 
     # Snapshot prior availability so we can detect a "became available" flip.
     previous = {
@@ -1770,6 +1812,7 @@ def _refresh_availability(user_book, configs):
             holds=getattr(result, "holds", None),
             wait_weeks=getattr(result, "wait_weeks", None),
             url=getattr(result, "url", None),
+            language=getattr(result, "language", None),
         ))
         db.session.add(new_rows[-1])
 
@@ -1779,13 +1822,15 @@ def _refresh_availability(user_book, configs):
     available_now = {
         (r.library, (r.format or "").lower()): r.available
         for r in new_rows
+        if _language_allowed(user, r)
     }
+
     if _became_available(previous, available_now):
         _notify_available(
             book.id,
             book.title,
             book.author,
-            [r for r in new_rows if r.available],
+            [r for r in new_rows if r.available and _language_allowed(user, r)],
         )
 
 
@@ -1998,6 +2043,11 @@ def get_availability(user_book_id):
         
         book = user_book.book
         availability = Availability.query.filter_by(book_id=book.id).all()
+        current_user = getattr(g, "user", None)
+        availability = [
+            a for a in availability
+            if _language_allowed(current_user, a)
+        ]
         
         return jsonify({
             "book": book.to_dict(),
@@ -2037,6 +2087,7 @@ def available_libraries():
                 "label": preset["label"],
                 "sub": (
                     "Unlimited borrows" if preset.get("hoopla")
+                    else "Free ebooks" if preset.get("free")
                     else "Libby / OverDrive" if preset.get("overdrive")
                     else "Bibliocommons"
                 ),

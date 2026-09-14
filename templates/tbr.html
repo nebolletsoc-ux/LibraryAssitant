@@ -1703,6 +1703,7 @@
                     const subParts = [];
                     const pl = providerLabel(row);
                     if (pl) subParts.push(pl);
+                    if (row.language) subParts.push(row.language);
                     if (row.holds != null) subParts.push(`${row.holds} hold${row.holds === 1 ? "" : "s"}`);
                     if (est) subParts.push(est);
                     const subText = subParts.join(" · ");
@@ -2253,6 +2254,7 @@
             const email = escapeHtml(p.email || "");
             const notifyOn = p.notify_on_available ? " on" : "";
             const digestOn = p.weekly_digest ? " on" : "";
+            const englishOn = p.only_english ? " on" : "";
             body.innerHTML = `
                 <div class="libraries-header">
                     <div class="libraries-title">
@@ -2289,6 +2291,15 @@
                         <span class="switch-knob"></span>
                     </button>
                 </div>
+                <div class="lib-row" style="padding-top: 16px;">
+                    <div>
+                        <p class="lib-name">Only English editions</p>
+                        <p class="lib-sub">Hide available copies that are in another language</p>
+                    </div>
+                    <button class="switch${englishOn}" id="pref-english" type="button" role="switch" aria-checked="${!!p.only_english}">
+                        <span class="switch-knob"></span>
+                    </button>
+                </div>
                 ${emailMsg}
                 <div style="padding-top: 8px;">
                     <button class="auth-btn" id="settings-save" type="button">Save</button>
@@ -2306,7 +2317,7 @@
 
             document.getElementById("settings-close-inner").addEventListener("click", () =>
                 closeSheet(document.getElementById("settings-sheet")));
-            ["pref-notify", "pref-digest"].forEach(id => {
+            ["pref-notify", "pref-digest", "pref-english"].forEach(id => {
                 document.getElementById(id).addEventListener("click", () => {
                     const el = document.getElementById(id);
                     el.classList.toggle("on");
@@ -2360,11 +2371,12 @@
             const email = document.getElementById("settings-email").value.trim();
             const notify = document.getElementById("pref-notify").classList.contains("on");
             const digest = document.getElementById("pref-digest").classList.contains("on");
+            const onlyEnglish = document.getElementById("pref-english").classList.contains("on");
             try {
                 const resp = await fetch(`${API_BASE}/user/preferences`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ email, notify_on_available: notify, weekly_digest: digest }),
+                    body: JSON.stringify({ email, notify_on_available: notify, weekly_digest: digest, only_english: onlyEnglish }),
                 });
                 if (!resp.ok) throw new Error("save failed");
                 userPrefs = await resp.json();

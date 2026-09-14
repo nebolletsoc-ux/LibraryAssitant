@@ -86,7 +86,7 @@ def _reset_db(request, app_context, client):
     """Reset all tables between tests so each test starts clean.
 
     By default also creates a "tester" account, logs it in, and seeds the
-    nine shipped library presets for it, so data-scoped endpoints behave as
+    shipped library presets for it, so data-scoped endpoints behave as
     before the auth work. Mark a test with ``@pytest.mark.no_auth`` to opt
     out of the account so auth/registration tests start from an empty DB.
     """

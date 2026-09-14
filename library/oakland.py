@@ -23,6 +23,14 @@ HOOPLA_SEARCH_URL = (
     "https://www.hoopladigital.com/search"
 )
 
+GUTENBERG_SEARCH_URL = (
+    "https://www.gutenberg.org/ebooks/search/"
+)
+
+OPENLIBRARY_SEARCH_URL = (
+    "https://openlibrary.org/search.json"
+)
+
 # Restrict subdomains to safe characters since they're interpolated into request URLs
 SUBDOMAIN_RE = re.compile(r"^[a-zA-Z0-9-]+$")
 
@@ -131,6 +139,7 @@ def result(
     url,
     holds=None,
     wait_weeks=None,
+    language=None,
 ):
     return LibraryResult(
         library=library,
@@ -141,6 +150,7 @@ def result(
         url=url,
         holds=holds,
         wait_weeks=wait_weeks,
+        language=language,
     )
 
 
@@ -266,6 +276,34 @@ def _libby_format(item):
         return "eBook"
 
     return "Digital"
+
+
+def _libby_languages(item):
+    """Return a display string for a Libby item's language(s)."""
+    if not isinstance(item, dict):
+        return None
+
+    languages = item.get("languages")
+
+    if isinstance(languages, list):
+        names = []
+
+        for entry in languages:
+            if isinstance(entry, dict):
+                name = entry.get("name")
+            else:
+                name = entry
+
+            if isinstance(name, str) and name.strip():
+                names.append(name.strip())
+
+        if names:
+            return ", ".join(names)
+
+    if isinstance(languages, str) and languages.strip():
+        return languages.strip()
+
+    return None
 
 
 def _libby_title(item):
@@ -1300,6 +1338,17 @@ def _extract_bibliocommons_results(
 
             _, wait_weeks = _extract_wait(avail_text)
 
+            language_match = re.search(
+                r"Language:\s*([A-Za-z][A-Za-z' -]*)",
+                block,
+            )
+
+            language = (
+                language_match.group(1).strip()
+                if language_match
+                else None
+            ) or None
+
             key = (url, format_name)
 
             if key in seen:
@@ -1327,6 +1376,7 @@ def _extract_bibliocommons_results(
                     url=url,
                     holds=holds,
                     wait_weeks=wait_weeks,
+                    language=language,
                 )
             )
 
@@ -1583,6 +1633,7 @@ def search_overdrive_libby(subdomain, library_key, title, author, timeout=15):
 
         format_name = _libby_format(item)
         url = _libby_url(item, base_url)
+        language = _libby_languages(item)
 
         if not url:
             continue
@@ -1609,6 +1660,7 @@ def search_overdrive_libby(subdomain, library_key, title, author, timeout=15):
                 url=url,
                 holds=holds,
                 wait_weeks=wait_weeks,
+                language=language,
             )
         )
 
@@ -1658,6 +1710,16 @@ def search_hoopla(library_key, title, author, timeout=15):
         holds = _extract_holds(snippet)
         available = wait is None
 
+        language_match = re.search(
+            r"Language:\s*([A-Za-z][A-Za-z' -]*)",
+            snippet,
+        )
+        language = (
+            language_match.group(1).strip()
+            if language_match
+            else None
+        ) or None
+
         key = (url, format_name)
         if key in seen:
             continue
@@ -1675,8 +1737,184 @@ def search_hoopla(library_key, title, author, timeout=15):
                 url=url,
                 holds=holds,
                 wait_weeks=wait_weeks,
+                language=language,
             )
         )
+
+    return results
+
+
+GUTENBERG_KNOWN_LANGUAGES = [
+    "English", "French", "German", "Spanish", "Italian", "Portuguese",
+    "Dutch", "Russian", "Chinese", "Japanese", "Korean", "Greek", "Latin",
+    "Danish", "Swedish", "Norwegian", "Finnish", "Polish", "Hungarian",
+    "Czech", "Turkish", "Arabic", "Hindi", "Welsh", "Irish", "Gaelic",
+    "Esperanto", "Catalan", "Basque", "Icelandic",
+]
+
+
+def _gutenberg_language(text):
+    """Best-effort language for a Gutenberg result line.
+
+    Gutenberg appends a parenthesized language to titles of translated
+    editions ("... (French)"); an unmarked result is English.
+    """
+    for marker in re.findall(r"\(([A-Za-z]+)\)", text or ""):
+        for known in GUTENBERG_KNOWN_LANGUAGES:
+            if marker.lower() == known.lower():
+                return known
+    return "English"
+
+
+def search_gutenberg(library_key, title, author, timeout=15):
+    """Search Project Gutenberg for a free public-domain edition."""
+    query = f"{title} {author}".strip()
+
+    try:
+        response = requests.get(
+            GUTENBERG_SEARCH_URL,
+            params={"query": query, "submit_search": "Go"},
+            headers=HEADERS,
+            timeout=timeout,
+        )
+        print(f"{library_key} Gutenberg: {response.status_code} {len(response.text)} bytes")
+    except Exception as error:
+        print(f"{library_key} Gutenberg ERROR: {error}")
+        return []
+
+    if response.status_code >= 400:
+        return []
+
+    html = response.text
+    results = []
+    seen = set()
+
+    for raw in re.split(r'<li class="booklink"', html)[1:]:
+        book_match = re.search(r'href="(/ebooks/(\d+))"', raw)
+        if not book_match:
+            continue
+
+        combined = re.sub(
+            r"\s+",
+            " ",
+            re.sub(r"<[^>]+>", " ", raw),
+        ).strip()
+
+        if not title_matches(combined, title, author):
+            continue
+
+        book_id = book_match.group(2)
+        url = f"https://www.gutenberg.org{book_match.group(1)}"
+
+        if book_id in seen:
+            continue
+        seen.add(book_id)
+
+        language = _gutenberg_language(combined)
+
+        print(f"{library_key} Gutenberg MATCH: {book_id} / \"{combined[:80]}\"")
+
+        results.append(
+            result(
+                library=library_key,
+                provider="Gutenberg",
+                format_name="eBook",
+                available=True,
+                wait=None,
+                url=url,
+                language=language,
+            )
+        )
+
+    if not results:
+        print(f"{library_key} Gutenberg: no specific match for {title}")
+
+    return results
+
+
+def _openlibrary_is_free(doc):
+    """True when an OpenLibrary record is free to read (public domain).
+
+    Handles both the current ``access`` field (``"public"``) and the older
+    ``ebook_access`` value (``"yes"``). Borrowable/limited-access editions
+    are not free and are deliberately excluded.
+    """
+    access = (doc.get("access") or doc.get("ebook_access") or "").lower()
+    return access in ("public", "yes")
+
+
+def search_openlibrary(library_key, title, author, timeout=15):
+    """Search Open Library for a free-to-read (public domain) edition.
+
+    Only entries whose catalog record says the ebook is free to read
+    (``access == 'public'``) are returned. Borrowable/limited-access
+    editions are not free and are deliberately skipped.
+    """
+    query = f"{title} {author}".strip()
+
+    try:
+        response = requests.get(
+            OPENLIBRARY_SEARCH_URL,
+            params={"q": query, "limit": 8},
+            headers=HEADERS,
+            timeout=timeout,
+        )
+        print(f"{library_key} OpenLibrary: {response.status_code} {len(response.text)} bytes")
+    except Exception as error:
+        print(f"{library_key} OpenLibrary ERROR: {error}")
+        return []
+
+    if response.status_code >= 400:
+        return []
+
+    try:
+        docs = (response.json().get("docs") or [])
+    except Exception as error:
+        print(f"{library_key} OpenLibrary ERROR: {error}")
+        return []
+
+    results = []
+    seen = set()
+
+    for doc in docs:
+        if not isinstance(doc, dict):
+            continue
+
+        item_title = doc.get("title") or ""
+        authors = " ".join(doc.get("author_name") or [])
+
+        combined = f"{item_title} {authors}".strip()
+
+        if not title_matches(combined, title, author):
+            continue
+
+        key = doc.get("key")
+        if not key:
+            continue
+
+        if not _openlibrary_is_free(doc):
+            continue
+
+        if key in seen:
+            continue
+        seen.add(key)
+
+        print(f"{library_key} OpenLibrary MATCH: {key} / \"{item_title}\"")
+
+        results.append(
+            result(
+                library=library_key,
+                provider="OpenLibrary",
+                format_name="eBook",
+                available=True,
+                wait=None,
+                url=f"https://openlibrary.org{key}",
+                language="English",
+            )
+        )
+
+    if not results:
+        print(f"{library_key} OpenLibrary: no free match for {title}")
 
     return results
 
@@ -1724,6 +1962,18 @@ def search_libraries(title, author, library_configs, timeout=15):
                 hoopla_searched = True
             except Exception as error:
                 print(f"Hoopla ERROR: {error}")
+
+        if config.get("gutenberg"):
+            try:
+                all_results.extend(search_gutenberg(key, title, author, timeout=timeout))
+            except Exception as error:
+                print(f"{key} Gutenberg ERROR: {error}")
+
+        if config.get("openlibrary"):
+            try:
+                all_results.extend(search_openlibrary(key, title, author, timeout=timeout))
+            except Exception as error:
+                print(f"{key} OpenLibrary ERROR: {error}")
 
     # Deduplicate final results
     deduped = []

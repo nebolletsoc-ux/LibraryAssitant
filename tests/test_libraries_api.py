@@ -10,6 +10,7 @@ def test_get_libraries_returns_defaults(client):
     assert keys == [
         "lapl", "oakland", "berkeley", "redwood_city", "hoopla",
         "sfpl", "ssfpl", "alameda_county", "contra_costa_county",
+        "gutenberg", "openlibrary",
     ]
     assert data[0]["label"] == "Los Angeles Public Library"
     # Defaults are all disabled in fixtures.
