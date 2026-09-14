@@ -49,3 +49,17 @@ def test_detail_sheet_message_distinguishes_checked(client):
     assert "Availability has not been checked yet." in html
     # The empty-rows branch must be conditional on the checked flag.
     assert "ub.availability_summary?.checked" in html
+
+
+def test_sort_label_matches_initial_default(client):
+    """The sort dropdown label must reflect the actual initial sort state.
+
+    Books default to title-asc, so the button label can't remain the
+    static fallback once syncSortLabel() runs; the function must be
+    wired up to renderSortMenu (initial paint) and the clear-filters
+    reset so the label and the applied sort never diverge.
+    """
+    html = _tbr_html(client)
+    assert "let sortKey = \"title-asc\";" in html
+    assert "function syncSortLabel()" in html
+    assert html.count("syncSortLabel()") >= 4  # function def + renderSortMenu init + renderSortMenu click + clear-filters

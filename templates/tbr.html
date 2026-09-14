@@ -1559,6 +1559,7 @@
                         availableOnly = false;
                         activeFormat = "all";
                         sortKey = "title-asc";
+                        syncSortLabel();
                         document.querySelectorAll(".seg-btn").forEach(b => b.classList.toggle("active", b.dataset.format === "all"));
                         document.getElementById("available-filter").classList.remove("active");
                         renderBooks();
@@ -1646,6 +1647,11 @@
 
         // ---------- sort menu ----------
 
+        function syncSortLabel() {
+            const opt = SORT_OPTIONS.find(o => o.id === sortKey);
+            document.getElementById("sort-label").textContent = opt?.label || sortKey;
+        }
+
         function renderSortMenu() {
             const menu = document.getElementById("sort-menu");
             menu.innerHTML = SORT_OPTIONS.map(opt => `
@@ -1656,11 +1662,11 @@
                     ` : ""}
                 </button>
             `).join("");
+            syncSortLabel();
             menu.querySelectorAll(".sort-option").forEach(btn => {
                 btn.addEventListener("click", () => {
                     sortKey = btn.dataset.sort;
-                    document.getElementById("sort-label").textContent =
-                        SORT_OPTIONS.find(o => o.id === sortKey).label;
+                    syncSortLabel();
                     menu.style.display = "none";
                     renderBooks();
                 });
