@@ -25,6 +25,8 @@ class User(db.Model):
     )
     email_verify_hash = db.Column(db.String(64), nullable=True)
     email_verify_expires = db.Column(db.DateTime, nullable=True)
+    password_reset_hash = db.Column(db.String(64), nullable=True)
+    password_reset_expires = db.Column(db.DateTime, nullable=True)
     notify_on_available = db.Column(
         db.Boolean, nullable=False, default=True, server_default="1"
     )

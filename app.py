@@ -144,6 +144,14 @@ with app.app_context():
         _user_alters.append(
             "ALTER TABLE users ADD COLUMN only_english BOOLEAN NOT NULL DEFAULT FALSE"
         )
+    if "password_reset_hash" not in _users_cols:
+        _user_alters.append(
+            "ALTER TABLE users ADD COLUMN password_reset_hash VARCHAR(64)"
+        )
+    if "password_reset_expires" not in _users_cols:
+        _user_alters.append(
+            "ALTER TABLE users ADD COLUMN password_reset_expires TIMESTAMP"
+        )
     for _stmt in _user_alters:
         db.session.execute(_text(_stmt))
     if _user_alters:
@@ -245,7 +253,7 @@ def no_cache(response):
     return response
 
 
-PUBLIC_PATHS = {"/healthz", "/", "/tbr", "/favicon.ico", "/terms", "/privacy", "/verify-email"}
+PUBLIC_PATHS = {"/healthz", "/", "/tbr", "/favicon.ico", "/terms", "/privacy", "/verify-email", "/reset-password"}
 
 
 def _is_public_path(path):
@@ -264,7 +272,7 @@ def _not_software_wanting_password(path):
         return True
     if path.startswith("/api/system/"):
         return True
-    return path in ("/terms", "/privacy", "/verify-email")
+    return path in ("/terms", "/privacy", "/verify-email", "/reset-password")
 
 
 def _current_user_id():
@@ -713,6 +721,176 @@ def verify_email():
     )
 
 
+def _send_password_reset_email(user):
+    """Stamp a fresh reset token on the user and email the click-link.
+
+    The token is only ever stored as a SHA-256 hash. The mailer is
+    fire-and-forget, same as the verification flow.
+    """
+    token = secrets.token_urlsafe(32)
+    user.password_reset_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    user.password_reset_expires = datetime.utcnow() + timedelta(hours=24)
+    base = request.url_root.rstrip("/")
+    link = f"{base}/reset-password?token={token}"
+    text = (
+        "Reset your MyNextRead password.\n\n"
+        f"{link}\n\n"
+        "This link expires in 24 hours. If you didn't ask for a reset, "
+        "you can ignore this email."
+    )
+    html = (
+        "<p>Reset your MyNextRead password.</p>"
+        '<p style="margin:24px 0"><a href="'
+        f"{link}"
+        '" style="background:#1f2937;color:#fff;padding:12px 20px;'
+        'border-radius:8px;text-decoration:none">Reset my password</a></p>'
+        "<p style="
+        '"color:#6b7280;font-size:13px">This link expires in 24 hours. '
+        "If you didn't ask for a reset, you can safely ignore this email.</p>"
+    )
+    mailer.submit_email(user.email, "Reset your MyNextRead password", text=text, html=html)
+
+
+@app.route("/api/auth/forgot-password", methods=["POST"])
+def forgot_password():
+    """Email a password-reset link for the username, if it has an address.
+
+    Unknown usernames get a generic success so we don't leak which names
+    exist. A username with no email address on file gets an explicit reply
+    (the reset can't be emailed) rather than a silent dead end.
+    """
+    if _auth_rate_limited(f"{request.remote_addr}|forgot"):
+        return _rate_limited_response()
+    data = request.get_json() or {}
+    username = (data.get("username") or "").strip()
+    if not username:
+        return jsonify({"error": "Enter your username."}), 400
+
+    user = User.query.filter_by(username=username).first()
+    if not user:
+        return jsonify({"sent": True}), 200
+
+    if not user.email:
+        return jsonify({
+            "sent": False,
+            "message": (
+                "That username has no email address on file, so a reset link "
+                "can't be sent. Ask the site administrator to reset the password."
+            ),
+        }), 200
+
+    if not mailer.is_enabled():
+        return jsonify({"error": "Email isn't configured on this server."}), 400
+
+    _send_password_reset_email(user)
+    db.session.commit()
+    return jsonify({"sent": True}), 200
+
+
+@app.route("/api/auth/reset-password", methods=["POST"])
+def reset_password():
+    """Set a new password from the emailed reset token."""
+    data = request.get_json() or {}
+    token = (data.get("token") or "").strip()
+    password = data.get("password") or ""
+    if not token:
+        return jsonify({"error": "Reset link is missing its token."}), 400
+    if len(password) < 6:
+        return jsonify({"error": "Password must be at least 6 characters."}), 400
+
+    digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    user = User.query.filter_by(password_reset_hash=digest).first()
+    if (
+        not user
+        or user.password_reset_expires is None
+        or user.password_reset_expires < datetime.utcnow()
+    ):
+        return jsonify({
+            "error": "That reset link is invalid or has expired. Request a new one.",
+        }), 400
+
+    user.password_hash = generate_password_hash(password)
+    user.password_reset_hash = None
+    user.password_reset_expires = None
+    if user.username:
+        _clear_login_fail(user.username)
+    db.session.commit()
+    return jsonify({"ok": True}), 200
+
+
+@app.route("/reset-password")
+def reset_password_page():
+    """Public one-time page where a reset token sets a new password.
+
+    The token itself is the credential, so no session or CSRF is needed
+    (matching the /verify-email design).
+    """
+    token = (request.args.get("token") or "").strip()
+    if not token:
+        return Response(
+            "<!doctype html><html><head><meta charset='utf-8'>"
+            "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+            "<title>Reset password</title></head><body "
+            "style='font-family:-apple-system,Segoe UI,Roboto,sans-serif;"
+            "background:#f5f5f4;display:flex;align-items:center;"
+            "justify-content:center;min-height:100vh;margin:0;padding:24px'>"
+            "<div style='background:#fff;border-radius:16px;padding:40px;"
+            "max-width:420px;box-shadow:0 10px 40px rgba(0,0,0,.08);"
+            "text-align:center'>"
+            "<h1 style='margin-top:0'>Missing reset link</h1>"
+            "<p>Click the full link from your reset email.</p>"
+            "</div></body></html>",
+            mimetype="text/html",
+            status=400,
+        )
+
+    script = (
+        "async function submit(){const p=document.getElementById('np').value;"
+        "const c=document.getElementById('cf').value;"
+        "const st=document.getElementById('status');st.textContent='';"
+        "if(!p||p.length<6){st.textContent='Password must be at least 6 characters.';return;}"
+        "if(p!==c){st.textContent='Passwords don\u2019t match.';return;}const btn=document.getElementById('go');"
+        "btn.disabled=true;try{const r=await fetch('/api/auth/reset-password',"
+        "{method:'POST',headers:{'Content-Type':'application/json'},"
+        "body:JSON.stringify({token:" + json.dumps(token) + ",password:p})});"
+        "const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Reset failed');"
+        "document.getElementById('form').hidden=true;"
+        "document.getElementById('done').hidden=false;}catch(e){st.textContent=e.message;}finally{btn.disabled=false;}}"
+    )
+    return Response(
+        "<!doctype html><html><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+        "<title>Reset password</title></head><body "
+        "style='font-family:-apple-system,Segoe UI,Roboto,sans-serif;"
+        "background:#f5f5f4;display:flex;align-items:center;justify-content:center;"
+        "min-height:100vh;margin:0;padding:24px'>"
+        "<div style='background:#fff;border-radius:16px;padding:40px;max-width:420px;"
+        "box-shadow:0 10px 40px rgba(0,0,0,.08)'>"
+        "<h1 style='margin:0 0 4px'>Reset password</h1>"
+        "<p style='color:#6b7280;margin-top:0'>Choose a new password for your account.</p>"
+        "<div id='form'>"
+        "<label style='display:block;font-size:13px;color:#374151;margin-bottom:4px'>New password</label>"
+        "<input id='np' type='password' style='width:100%;box-sizing:border-box;padding:10px;"
+        "border:1px solid #d6d3d1;border-radius:8px;margin-bottom:16px' "
+        "autocomplete='new-password'>"
+        "<label style='display:block;font-size:13px;color:#374151;margin-bottom:4px'>Confirm password</label>"
+        "<input id='cf' type='password' style='width:100%;box-sizing:border-box;padding:10px;"
+        "border:1px solid #d6d3d1;border-radius:8px;margin-bottom:8px' "
+        "autocomplete='new-password'>"
+        "<p id='status' style='color:#b91c1c;font-size:13px;min-height:18px'></p>"
+        "<button id='go' onclick='submit()' style='width:100%;background:#1f2937;color:#fff;"
+        "border:0;border-radius:8px;padding:12px;font-size:15px;cursor:pointer'>"
+        "Set new password</button></div>"
+        "<div id='done' hidden style='text-align:center'>"
+        "<p style='color:#15803d'>Password updated.</p>"
+        "<p>Go back to MyNextRead and log in.</p>"
+        "<a href='/tbr' style='display:inline-block;background:#1f2937;color:#fff;"
+        "border-radius:8px;padding:12px 20px;text-decoration:none'>Back to the app</a></div>"
+        "</div><script>" + script + "</script></body></html>",
+        mimetype="text/html",
+    )
+
+
 def _run_weekly_digest():
     """Email each weekly-digest subscriber their currently available books.
 
@@ -750,9 +928,13 @@ def _run_weekly_digest():
             continue
 
         lines = []
+        labels = _library_labels_for(user)
         for book, avail_rows in available:
             opts = ", ".join(
-                sorted({f"{a.library} · {a.format or 'book'}" for a in avail_rows})
+                sorted({
+                    f"{labels.get(a.library, a.library)} · {a.format or 'book'}"
+                    for a in avail_rows
+                })
             )
             lines.append(f"\u2022 {book.title}"
                          f"{' by ' + book.author if book.author else ''} — {opts}")
@@ -1770,6 +1952,21 @@ def _library_search_configs():
     return configs
 
 
+def _library_labels_for(user):
+    """Map library keys to readable labels for a user.
+
+    The user's own ``LibraryConfig`` labels win (they cover custom
+    libraries); the shipped preset labels fill in any gaps.
+    """
+    labels = {}
+    for config in LibraryConfig.query.filter_by(user_id=user.id).all():
+        if config.library_key:
+            labels[config.library_key] = config.label or config.library_key
+    for key, preset in LIBRARY_PRESETS.items():
+        labels.setdefault(key, preset.get("label", key))
+    return labels
+
+
 def _language_allowed(user, row):
     """True when a cached availability row passes the user's English-only filter.
 
@@ -1872,19 +2069,19 @@ def _notify_available(book_id, title, author, available_rows):
         if not owners or not available_rows:
             return
 
-        lines = []
-        for row in available_rows:
-            fmt = row.format if row.format else "book"
-            lines.append(f"{row.library} · {fmt}")
-        summary = ", ".join(sorted(set(lines)))
-
         subject = f"\u201c{title}\u201d is available now"
-        text = (
-            f"{title}{' by ' + author if author else ''} just became available "
-            f"at your libraries.\n\nAvailable now: {summary}\n\n"
-            "Open your reading list to borrow it."
-        )
         for user in owners:
+            labels = _library_labels_for(user)
+            lines = []
+            for row in available_rows:
+                fmt = row.format if row.format else "book"
+                lines.append(f"{labels.get(row.library, row.library)} · {fmt}")
+            summary = ", ".join(sorted(set(lines)))
+            text = (
+                f"{title}{' by ' + author if author else ''} just became available "
+                f"at your libraries.\n\nAvailable now: {summary}\n\n"
+                "Open your reading list to borrow it."
+            )
             mailer.submit_email(user.email, subject, text=text)
     except Exception as e:  # noqa: BLE001 - alerts must never break a scan
         print(f"Error sending availability alert for book {book_id}: {e}")

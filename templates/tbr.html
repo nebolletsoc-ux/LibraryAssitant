@@ -1131,6 +1131,34 @@
             text-align: center;
         }
         .auth-legal a { color: #78716C; text-decoration: underline; }
+        .auth-note {
+            color: #78350F;
+            background: #FFFBEB;
+            border: 1px solid #FDE68A;
+            font-size: 13px;
+            line-height: 1.45;
+            border-radius: 8px;
+            padding: 8px 10px;
+            margin-bottom: 10px;
+            text-align: left;
+        }
+        .auth-note[hidden] { display: none; }
+        .auth-forgot-link {
+            margin: 10px 0 0;
+            text-align: center;
+            font-size: 13px;
+        }
+        .auth-forgot-link button {
+            background: none;
+            border: none;
+            padding: 0;
+            color: #78716C;
+            text-decoration: underline;
+            font-family: inherit;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .auth-forgot-link button:hover { color: #44403C; }
         a.pill-btn { text-decoration: none; }
         .legal-links {
             margin: 10px 0 6px;
@@ -1145,15 +1173,27 @@
     <div id="auth-screen" class="auth-screen" hidden>
         <div class="auth-card">
             <img class="auth-logo" src="{{ url_for('static', filename='owl icon2.PNG') }}" alt="MyNextRead">
-            <h1 class="h-serif">MyNextRead</h1>
-            <p class="auth-sub">Sign in to your reading list</p>
-            <input id="auth-website" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;">
-            <input id="auth-username" class="auth-input" type="text" placeholder="Username" autocomplete="username">
-            <input id="auth-password" class="auth-input" type="password" placeholder="Password" autocomplete="current-password">
-            <p id="auth-error" class="auth-error" hidden></p>
-            <button id="auth-login" class="auth-btn" type="button">Log in</button>
-            <button id="auth-register" class="auth-btn auth-btn-secondary" type="button">Create account</button>
-            <p class="auth-legal"><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
+            <div id="auth-login-view">
+                <h1 class="h-serif">MyNextRead</h1>
+                <p class="auth-sub">Sign in to your reading list</p>
+                <input id="auth-website" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;">
+                <input id="auth-username" class="auth-input" type="text" placeholder="Username" autocomplete="username">
+                <input id="auth-password" class="auth-input" type="password" placeholder="Password" autocomplete="current-password">
+                <p id="auth-error" class="auth-error" hidden></p>
+                <button id="auth-login" class="auth-btn" type="button">Log in</button>
+                <button id="auth-register" class="auth-btn auth-btn-secondary" type="button">Create account</button>
+                <p class="auth-forgot-link"><button id="auth-forgot-link" type="button">Forgot password?</button></p>
+                <p class="auth-legal"><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
+            </div>
+            <div id="auth-forgot-view" hidden>
+                <h1 class="h-serif">Reset password</h1>
+                <p class="auth-sub">Enter your username and we\u2019ll email you a reset link</p>
+                <input id="auth-forgot-username" class="auth-input" type="text" placeholder="Username" autocomplete="username">
+                <p id="auth-forgot-status" class="auth-note" hidden></p>
+                <p id="auth-forgot-error" class="auth-error" hidden></p>
+                <button id="auth-forgot-send" class="auth-btn" type="button">Send reset link</button>
+                <button id="auth-forgot-back" class="auth-btn auth-btn-secondary" type="button">Back to login</button>
+            </div>
         </div>
     </div>
     <div id="app">
@@ -1372,10 +1412,66 @@
             }
         }
 
+        function showForgotView(show) {
+            document.getElementById("auth-login-view").hidden = show;
+            document.getElementById("auth-forgot-view").hidden = !show;
+            if (show) {
+                document.getElementById("auth-error").hidden = true;
+                document.getElementById("auth-forgot-status").hidden = true;
+                document.getElementById("auth-forgot-error").hidden = true;
+                document.getElementById("auth-forgot-username").focus();
+            } else {
+                document.getElementById("auth-forgot-username").value = "";
+            }
+        }
+
+        async function submitForgot(btn) {
+            const username = document.getElementById("auth-forgot-username").value.trim();
+            const errEl = document.getElementById("auth-forgot-error");
+            const statusEl = document.getElementById("auth-forgot-status");
+            errEl.hidden = true;
+            statusEl.hidden = true;
+            if (!username) {
+                errEl.textContent = "Enter your username.";
+                errEl.hidden = false;
+                return;
+            }
+            btn.disabled = true;
+            try {
+                const resp = await window.fetch("/api/auth/forgot-password", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ username }),
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok) throw new Error(data.error || "Something went wrong");
+                if (data.message) {
+                    statusEl.textContent = data.message;
+                } else {
+                    statusEl.textContent = "If that username has an email address, a reset link is on its way.";
+                }
+                statusEl.hidden = false;
+            } catch (e) {
+                errEl.textContent = e.message;
+                errEl.hidden = false;
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
         document.getElementById("auth-login").addEventListener("click",
             () => submitAuth("login", document.getElementById("auth-login")));
         document.getElementById("auth-register").addEventListener("click",
             () => submitAuth("register", document.getElementById("auth-register")));
+        document.getElementById("auth-forgot-link").addEventListener("click",
+            () => showForgotView(true));
+        document.getElementById("auth-forgot-back").addEventListener("click",
+            () => showForgotView(false));
+        document.getElementById("auth-forgot-send").addEventListener("click",
+            () => submitForgot(document.getElementById("auth-forgot-send")));
+        document.getElementById("auth-forgot-username").addEventListener("keydown", (e) => {
+            if (e.key === "Enter") submitForgot(document.getElementById("auth-forgot-send"));
+        });
         document.getElementById("logout-btn").addEventListener("click", async () => {
             try { await window.fetch("/api/auth/logout", { method: "POST" }); } catch (e) {}
             currentUser = null;
@@ -1444,9 +1540,13 @@
             return weeks != null ? `~${weeks} wk${weeks === 1 ? "" : "s"}` : null;
         }
 
+        function titleCase(s) {
+            return (s || "").split(/\s+/).map(w => w ? w[0].toUpperCase() + w.slice(1) : w).join(" ");
+        }
+
         function libraryLabel(key) {
             const found = libraryConfigs.find(l => l.library_key === key);
-            return found ? found.label : key;
+            return found && found.label ? found.label : titleCase(key);
         }
 
         function providerLabel(row) {
