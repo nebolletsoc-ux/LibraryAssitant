@@ -1,5 +1,7 @@
 """Tests for the library configuration endpoints."""
 
+import pytest
+
 
 def test_get_libraries_returns_defaults(client):
     resp = client.get("/api/libraries")
@@ -10,6 +12,7 @@ def test_get_libraries_returns_defaults(client):
     assert keys == [
         "lapl", "oakland", "berkeley", "redwood_city", "hoopla",
         "sfpl", "ssfpl", "alameda_county", "contra_costa_county",
+        "multnomah_county", "washington_county_or", "washington_anytime",
         "gutenberg", "openlibrary",
     ]
     assert data[0]["label"] == "Los Angeles Public Library"
@@ -73,6 +76,29 @@ def test_add_preset_library_from_available(client, current_user_id, app_context)
     data = resp.get_json()
     assert data["label"] == "Oakland Public Library"
     assert data["bibliocommons"] == "oaklandlibrary"
+    assert data["enabled"] is True
+
+
+@pytest.mark.parametrize(
+    "library_key,label,subdomain",
+    [
+        ("multnomah_county", "Multnomah County Library", "multcolib"),
+        ("washington_county_or", "Washington County Cooperative Library Services", "wccls"),
+        ("washington_anytime", "Washington Anytime Library", "anytime"),
+    ],
+)
+def test_add_new_overdrive_preset(client, current_user_id, app_context, library_key, label, subdomain):
+    from models import LibraryConfig, db
+
+    with app_context.app.app_context():
+        LibraryConfig.query.filter_by(user_id=current_user_id, library_key=library_key).delete()
+        db.session.commit()
+
+    resp = client.post("/api/libraries", json={"library_key": library_key})
+    assert resp.status_code == 201
+    data = resp.get_json()
+    assert data["label"] == label
+    assert data["overdrive"] == subdomain
     assert data["enabled"] is True
 
 

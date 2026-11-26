@@ -542,3 +542,89 @@ def test_digest_respects_enabled_libraries(client, app_context, monkeypatch):
 
     assert sent == 0
     assert calls == []
+
+
+def test_digest_claims_only_available_ebooks_and_audiobooks(client, app_context, monkeypatch):
+    from models import Availability, Book
+
+    calls = capture_emails(monkeypatch)
+    set_prefs(client, weekly_digest=True)
+    set_reader_email(app_context)
+    enable_library(client, "lapl")
+
+    included = add_book(client, title="Digital Available", author="A Author", isbn="9780000000001")
+    physical = add_book(client, title="Physical Only", author="B Author", isbn="9780000000002")
+    unavailable = add_book(client, title="Digital Unavailable", author="C Author", isbn="9780000000003")
+    disabled = add_book(client, title="Disabled Library Digital", author="D Author", isbn="9780000000004")
+
+    seed_availability(app_context, included["id"], library="lapl", available=True, format_="eBook")
+    seed_availability(app_context, included["id"], library="lapl", available=True, format_="Audiobook")
+    seed_availability(app_context, physical["id"], library="lapl", available=True, format_="Book")
+    seed_availability(app_context, unavailable["id"], library="lapl", available=False, format_="eBook")
+    seed_availability(app_context, disabled["id"], library="berkeley", available=True, format_="eBook")
+
+    import app as app_module
+    with app_context.app.app_context():
+        sent = app_module._run_weekly_digest()
+
+    assert sent == 1
+    assert len(calls) == 1
+    assert calls[0][1] == "MyNextRead: 1 book available now"
+
+    body = calls[0][2]
+    lines = [line for line in body.splitlines() if line.startswith("• ")]
+    assert len(lines) == 1
+    assert "Digital Available" in lines[0]
+    assert "eBook" in lines[0]
+    assert "Audiobook" in lines[0]
+    assert "Physical Only" not in body
+    assert "Digital Unavailable" not in body
+    assert "Disabled Library Digital" not in body
+
+    with app_context.app.app_context():
+        claimed_titles = [line[2:].split(" by ")[0].split(" — ")[0] for line in lines]
+        for title in claimed_titles:
+            book = Book.query.filter_by(title=title).one()
+            backed = Availability.query.filter(
+                Availability.book_id == book.id,
+                Availability.available.is_(True),
+                Availability.library == "lapl",
+                Availability.format.in_(["eBook", "Audiobook"]),
+            ).count()
+            assert backed >= 1
+
+
+@pytest.mark.parametrize(
+    "index,format_,included",
+    [
+        (0, "eBook", True),
+        (1, "Audiobook", True),
+        (2, "e-book", True),
+        (3, "audio book", True),
+        (4, "eAudiobook", True),
+        (5, "Book", False),
+        (6, "Digital", False),
+        (7, "Video", False),
+        (8, "Music", False),
+    ],
+)
+def test_digest_format_filter(client, app_context, monkeypatch, index, format_, included):
+    calls = capture_emails(monkeypatch)
+    set_prefs(client, weekly_digest=True)
+    set_reader_email(app_context)
+    enable_library(client, "lapl")
+
+    title = f"Format {format_}"
+    book = add_book(client, title=title, author="Format Author", isbn=f"978000000{index:04d}")
+    seed_availability(app_context, book["id"], library="lapl", available=True, format_=format_)
+
+    import app as app_module
+    with app_context.app.app_context():
+        sent = app_module._run_weekly_digest()
+
+    assert sent == (1 if included else 0)
+    if included:
+        assert len(calls) == 1
+        assert title in calls[0][2]
+    else:
+        assert calls == []

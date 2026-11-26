@@ -111,6 +111,9 @@ LIBRARY_PRESETS = {
     "ssfpl": {"key": "ssfpl", "label": "South San Francisco Public Library", "bibliocommons": "ssfpl"},
     "alameda_county": {"key": "alameda_county", "label": "Alameda County Library", "bibliocommons": "aclibrary"},
     "contra_costa_county": {"key": "contra_costa_county", "label": "Contra Costa County Library", "bibliocommons": "ccclib"},
+    "multnomah_county": {"key": "multnomah_county", "label": "Multnomah County Library", "overdrive": "multcolib"},
+    "washington_county_or": {"key": "washington_county_or", "label": "Washington County Cooperative Library Services", "overdrive": "wccls"},
+    "washington_anytime": {"key": "washington_anytime", "label": "Washington Anytime Library", "overdrive": "anytime"},
     "gutenberg": {"key": "gutenberg", "label": "Project Gutenberg (free ebooks)", "free": True},
     "openlibrary": {"key": "openlibrary", "label": "Open Library (free ebooks)", "free": True},
 }
@@ -891,8 +894,16 @@ def reset_password_page():
     )
 
 
+DIGEST_FORMATS = {"ebook", "audiobook", "eaudiobook"}
+
+
+def _is_digest_format(format_):
+    normalized = (format_ or "").strip().lower().replace("-", "").replace(" ", "")
+    return normalized in DIGEST_FORMATS
+
+
 def _run_weekly_digest():
-    """Email each weekly-digest subscriber their currently available books.
+    """Email each weekly-digest subscriber their available ebooks and audiobooks.
 
     Returns the number of emails sent. Called by the send_digest.py CLI (and
     swappable into any scheduler). Non-subscribers/empties are skipped.
@@ -921,7 +932,7 @@ def _run_weekly_digest():
             if enabled_keys:
                 rows = [a for a in rows if a.library in enabled_keys]
             rows = [a for a in rows if _language_allowed(user, a)]
-            avail_rows = [a for a in rows if a.available]
+            avail_rows = [a for a in rows if a.available and _is_digest_format(a.format)]
             if avail_rows:
                 available.append((user_book.book, avail_rows))
         if not available:
